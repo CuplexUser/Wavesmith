@@ -1,0 +1,27 @@
+{
+  "note": "Two 45-degree mirrors in the right-hand gap.",
+  "pieces": [
+    {
+      "kind": "reflector",
+      "a": [
+        205,
+        20
+      ],
+      "b": [
+        245,
+        60
+      ]
+    },
+    {
+      "kind": "reflector",
+      "a": [
+        205,
+        140
+      ],
+      "b": [
+        245,
+        100
+      ]
+    }
+  ]
+}

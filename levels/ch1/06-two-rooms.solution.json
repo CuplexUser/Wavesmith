@@ -1,0 +1,27 @@
+{
+  "note": "Absorber across the right doorway, reflector steering into the left one.",
+  "pieces": [
+    {
+      "kind": "absorber",
+      "pos": [
+        160,
+        95
+      ],
+      "size": [
+        64,
+        12
+      ]
+    },
+    {
+      "kind": "reflector",
+      "a": [
+        100,
+        30
+      ],
+      "b": [
+        140,
+        10
+      ]
+    }
+  ]
+}

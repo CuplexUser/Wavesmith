@@ -1,0 +1,50 @@
+{
+  "chapter": 1,
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "id": "1-4",
+  "name": "Shelter",
+  "description": "Keep the quiet zone quiet. Walls cast shadows, but waves bend around short ones.",
+  "hint": "The shadow behind a wall is deepest when the wall is several wavelengths wide.",
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        50,
+        80
+      ],
+      "freq": 3
+    }
+  ],
+  "goals": [
+    {
+      "kind": "silence",
+      "pos": [
+        200,
+        80
+      ],
+      "radius": 12,
+      "threshold": 0.015,
+      "hold": 4
+    }
+  ],
+  "inventory": {
+    "wall": {
+      "count": 4,
+      "cost": 1,
+      "maxSize": 50
+    }
+  },
+  "budget": 4,
+  "par": {
+    "cost": 3,
+    "energy": 31
+  },
+  "timeLimit": 20
+}

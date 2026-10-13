@@ -1,0 +1,29 @@
+{
+  "note": "Two arcs on the ellipse with foci at the source and the target.",
+  "pieces": [
+    {
+      "kind": "reflector",
+      "a": [
+        68,
+        50.4
+      ],
+      "b": [
+        188,
+        50.4
+      ],
+      "bulge": -27.8
+    },
+    {
+      "kind": "reflector",
+      "a": [
+        68,
+        109.6
+      ],
+      "b": [
+        188,
+        109.6
+      ],
+      "bulge": 27.8
+    }
+  ]
+}

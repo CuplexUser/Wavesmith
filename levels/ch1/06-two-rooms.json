@@ -1,0 +1,103 @@
+{
+  "chapter": 1,
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "id": "1-6",
+  "name": "Two Rooms",
+  "description": "Fill the left room with sound and keep the right room quiet. Walls only move noise around; an absorber swallows it.",
+  "hint": "Absorbers soak up waves that pass through them. Cover the doorway you want silent.",
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        128,
+        25
+      ],
+      "freq": 3
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        128,
+        70
+      ],
+      "b": [
+        128,
+        160
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        0,
+        95
+      ],
+      "b": [
+        90,
+        95
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        190,
+        95
+      ],
+      "b": [
+        256,
+        95
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        50,
+        130
+      ],
+      "radius": 5,
+      "threshold": 0.24,
+      "hold": 3
+    },
+    {
+      "kind": "silence",
+      "pos": [
+        215,
+        130
+      ],
+      "radius": 12,
+      "threshold": 0.03,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "absorber": {
+      "count": 1,
+      "cost": 2,
+      "maxSize": 70
+    },
+    "reflector": {
+      "count": 1,
+      "cost": 1,
+      "maxSize": 50
+    }
+  },
+  "budget": 3,
+  "par": {
+    "cost": 3,
+    "energy": 40
+  },
+  "timeLimit": 25
+}

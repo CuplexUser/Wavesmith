@@ -1,0 +1,17 @@
+{
+  "note": "Concave dish focused on the target.",
+  "pieces": [
+    {
+      "kind": "reflector",
+      "a": [
+        215,
+        30
+      ],
+      "b": [
+        215,
+        130
+      ],
+      "bulge": -15
+    }
+  ]
+}

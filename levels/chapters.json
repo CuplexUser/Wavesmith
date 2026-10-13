@@ -1,0 +1,41 @@
+{
+  "chapters": [
+    {
+      "id": 1,
+      "name": "Reflection",
+      "free": true,
+      "levels": [
+        "01-first-bounce",
+        "02-corridor",
+        "03-dish",
+        "04-shelter",
+        "05-whispering-gallery",
+        "06-two-rooms"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Interference",
+      "free": true,
+      "levels": []
+    },
+    {
+      "id": 3,
+      "name": "Resonance",
+      "free": false,
+      "levels": []
+    },
+    {
+      "id": 4,
+      "name": "Refraction",
+      "free": false,
+      "levels": []
+    },
+    {
+      "id": 5,
+      "name": "Doppler",
+      "free": false,
+      "levels": []
+    }
+  ]
+}

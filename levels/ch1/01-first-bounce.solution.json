@@ -1,0 +1,16 @@
+{
+  "note": "Vertical mirror right of the barrier's end.",
+  "pieces": [
+    {
+      "kind": "wall",
+      "a": [
+        170,
+        30
+      ],
+      "b": [
+        170,
+        130
+      ]
+    }
+  ]
+}

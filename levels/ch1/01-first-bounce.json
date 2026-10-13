@@ -1,0 +1,64 @@
+{
+  "chapter": 1,
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "id": "1-1",
+  "name": "First Bounce",
+  "description": "A wall hides the target from the source. Place a wall where the waves can bounce off it and come back down.",
+  "hint": "Waves reflect like light from a mirror: angle in equals angle out.",
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        60,
+        40
+      ],
+      "freq": 3
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        0,
+        80
+      ],
+      "b": [
+        110,
+        80
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        60,
+        122
+      ],
+      "radius": 5,
+      "threshold": 0.25,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "wall": {
+      "count": 1,
+      "cost": 1,
+      "maxSize": 100
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 27
+  },
+  "timeLimit": 30
+}

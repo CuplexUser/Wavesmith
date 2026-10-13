@@ -1,0 +1,64 @@
+{
+  "chapter": 1,
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "id": "1-2",
+  "name": "Corridor",
+  "description": "Send the waves down the far side and back along the bottom. Two mirrors turn a corner each.",
+  "hint": "A mirror tilted at 45 degrees turns a wave through a right angle.",
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        30,
+        40
+      ],
+      "freq": 3
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        0,
+        80
+      ],
+      "b": [
+        190,
+        80
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        40,
+        125
+      ],
+      "radius": 5,
+      "threshold": 0.15,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "reflector": {
+      "count": 3,
+      "cost": 1,
+      "maxSize": 60
+    }
+  },
+  "budget": 3,
+  "par": {
+    "cost": 2,
+    "energy": 42
+  },
+  "timeLimit": 30
+}

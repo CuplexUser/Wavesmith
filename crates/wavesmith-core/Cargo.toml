@@ -1,0 +1,11 @@
+[package]
+name = "wavesmith-core"
+description = "Deterministic 2D wave solver, level model, and scoring for Wavesmith"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+libm.workspace = true
