@@ -1,7 +1,7 @@
 mod common;
 
 use common::{gaussian_pulse, open_level};
-use wavesmith_core::materials::{rasterize, OVERLAY_WALL};
+use wavesmith_core::materials::{rasterize, OVERLAY_CHANNELS};
 use wavesmith_core::solver::{Materials, Solver, SolverError};
 use wavesmith_core::{Item, Session, MAX_SPEED, SPONGE};
 
@@ -69,11 +69,19 @@ fn walls_stay_pinned_with_sources() {
         }])
         .unwrap();
     session.step(240);
-    for (u, o) in session.field().iter().zip(session.overlay()) {
-        if *o == OVERLAY_WALL {
+    let overlay = session.overlay().as_chunks::<OVERLAY_CHANNELS>().0;
+    let mut walls = 0;
+    for (u, px) in session.field().iter().zip(overlay) {
+        if px[3] == 255 {
+            walls += 1;
             assert_eq!(*u, 0.0);
+            // The drawn surface (distance zero, byte 127.5) agrees with the solver's mask.
+            assert!(px[0] <= 128, "wall cell drawn outside the wall");
+        } else {
+            assert!(px[0] >= 127, "open cell drawn inside a wall");
         }
     }
+    assert!(walls > 0);
 }
 
 /// Peak arrival time of a plane pulse uniform in y, released at `x0` and probed at `xp`.

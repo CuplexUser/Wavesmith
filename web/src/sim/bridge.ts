@@ -38,9 +38,9 @@ export class Sim {
     return new Float32Array(memory!.buffer, this.game.field_ptr(), this.nx * this.ny);
   }
 
-  /** A view of the material overlay (walls, absorbers, lens strength). */
+  /** A view of the RGBA material overlay: wall distance, absorber, lens, wall mask. */
   overlay(): Uint8Array {
-    return new Uint8Array(memory!.buffer, this.game.overlay_ptr(), this.nx * this.ny);
+    return new Uint8Array(memory!.buffer, this.game.overlay_ptr(), this.nx * this.ny * 4);
   }
 
   step(n: number): void {

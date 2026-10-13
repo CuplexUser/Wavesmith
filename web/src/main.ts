@@ -16,6 +16,8 @@ async function boot(): Promise<void> {
     app.register('select', (a) => levelSelectScreen(a));
     app.register('play', (a, r) => playScreen(a, r.screen === 'play' ? r.levelId : ''));
     app.go(app.routeFromHash());
+    // Browser back/forward and edited URLs.
+    window.addEventListener('hashchange', () => app.go(app.routeFromHash()));
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);

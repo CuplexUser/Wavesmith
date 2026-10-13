@@ -1,6 +1,10 @@
 // WebGL2 renderer: uploads the wave field as an R32F texture and the material overlay as an
-// R8UI texture, then colors both in one full-screen pass. Filtering is done by hand with
-// texelFetch so it works without OES_texture_float_linear, which many phones lack.
+// RGBA8 texture, then colors both in one full-screen pass. The field is filtered by hand with
+// texelFetch so it works without OES_texture_float_linear, which many phones lack; the
+// overlay is 8-bit, so the GPU filters it.
+//
+// Walls are drawn from a signed-distance field (overlay red channel) rather than from the
+// solver's cell mask, so their edges are anti-aliased and follow the true geometry.
 
 const VERT = `#version 300 es
 in vec2 aPos;
@@ -14,7 +18,8 @@ const FRAG = `#version 300 es
 precision highp float;
 precision highp int;
 uniform highp sampler2D uField;
-uniform highp usampler2D uMat;
+uniform sampler2D uMat;
+uniform vec2 uGrid;
 uniform vec2 uPlay;
 uniform float uPad;
 uniform float uGain;
@@ -22,7 +27,15 @@ uniform float uPx;
 in vec2 vUv;
 out vec4 outColor;
 
+// Must match OVERLAY_SDF_RANGE in wavesmith-core/src/materials.rs.
+const float SDF_RANGE = 4.0;
+
 float f(ivec2 p) { return texelFetch(uField, p, 0).r; }
+
+vec4 mat(vec2 g) { return texture(uMat, (g + 0.5) / uGrid); }
+
+/** Distance in cells to the nearest wall surface, negative inside. */
+float wallDist(vec2 g) { return mat(g).r * (2.0 * SDF_RANGE) - SDF_RANGE; }
 
 void main() {
   vec2 g = vec2(uPad) + vUv * uPlay - 0.5;
@@ -47,25 +60,39 @@ void main() {
   float line = 1.0 - smoothstep(0.0, uPx * 1.2, min(gd.x, gd.y));
   col += vec3(0.05, 0.08, 0.14) * line * 0.35;
 
-  uint m = texelFetch(uMat, ivec2(floor(g + 0.5)), 0).r;
-  if (m == 255u) {
-    // Wall: lit from the top-left using neighboring wall coverage.
-    ivec2 c = ivec2(floor(g + 0.5));
-    float up = texelFetch(uMat, c + ivec2(0, -1), 0).r == 255u ? 0.0 : 1.0;
-    float lf = texelFetch(uMat, c + ivec2(-1, 0), 0).r == 255u ? 0.0 : 1.0;
-    float dn = texelFetch(uMat, c + ivec2(0, 1), 0).r == 255u ? 0.0 : 1.0;
-    float rt = texelFetch(uMat, c + ivec2(1, 0), 0).r == 255u ? 0.0 : 1.0;
-    vec3 wall = vec3(0.64, 0.7, 0.8);
-    wall += 0.18 * (up + lf) - 0.22 * (dn + rt);
-    col = wall;
-  } else {
-    float lens = float(m & 63u) / 63.0;
-    if (lens > 0.0) {
-      col = mix(col, vec3(0.62, 0.42, 1.0), lens * 0.38);
-    }
-    if ((m & 64u) != 0u) {
-      float stripe = step(0.62, fract((gl_FragCoord.x + gl_FragCoord.y) / 9.0));
-      col = mix(col, vec3(0.0), 0.45) + vec3(0.09, 0.05, 0.12) * stripe;
+  vec4 m = mat(g);
+  // One device pixel, in cells: the width of every anti-aliased edge.
+  float aa = uPx;
+
+  // Lens: violet tint scaled by how much it slows waves.
+  col = mix(col, vec3(0.62, 0.42, 1.0), m.b * 0.38);
+
+  // Absorber: darkened and hatched, with its edge at 50% coverage.
+  if (m.g > 0.0) {
+    float w = max(fwidth(m.g), 1e-4);
+    float cover = smoothstep(0.5 - w, 0.5 + w, m.g);
+    float phase = fract((gl_FragCoord.x + gl_FragCoord.y) / 9.0);
+    float stripe = smoothstep(0.55, 0.62, phase) * (1.0 - smoothstep(0.9, 0.97, phase));
+    vec3 hatched = col * 0.55 + vec3(0.09, 0.05, 0.12) * stripe;
+    col = mix(col, hatched, cover);
+  }
+
+  float d = wallDist(g);
+  if (d < 2.0) {
+    // Soft contact shadow cast down and to the right of walls.
+    float ds = wallDist(g - vec2(0.8, 0.8));
+    col *= 1.0 - 0.4 * (1.0 - smoothstep(-0.5, 1.5, ds));
+
+    float wall = 1.0 - smoothstep(-0.5 * aa, 0.5 * aa, d);
+    if (wall > 0.0) {
+      // Bevel from the distance gradient (it points out of the wall), lit from the top-left.
+      vec2 grad = vec2(wallDist(g + vec2(0.5, 0.0)) - wallDist(g - vec2(0.5, 0.0)),
+                       wallDist(g + vec2(0.0, 0.5)) - wallDist(g - vec2(0.0, 0.5)));
+      vec2 n = grad / max(length(grad), 1e-4);
+      float lit = dot(n, vec2(-0.7071, -0.7071));
+      float rim = smoothstep(-1.4, -0.1, d);
+      vec3 wallCol = vec3(0.6, 0.66, 0.76) + rim * (0.2 * lit + 0.05);
+      col = mix(col, wallCol, wall);
     }
   }
   outColor = vec4(col, 1.0);
@@ -105,7 +132,7 @@ export class FieldRenderer {
       throw new Error(`program: ${gl.getProgramInfoLog(prog) ?? 'link failed'}`);
     }
     this.prog = prog;
-    for (const name of ['uField', 'uMat', 'uPlay', 'uPad', 'uGain', 'uPx']) {
+    for (const name of ['uField', 'uMat', 'uGrid', 'uPlay', 'uPad', 'uGain', 'uPx']) {
       this.uniforms[name] = gl.getUniformLocation(prog, name);
     }
     const buf = gl.createBuffer();
@@ -113,17 +140,17 @@ export class FieldRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    this.fieldTex = this.makeTexture();
-    this.matTex = this.makeTexture();
+    this.fieldTex = this.makeTexture(gl.NEAREST);
+    this.matTex = this.makeTexture(gl.LINEAR);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   }
 
-  private makeTexture(): WebGLTexture {
+  private makeTexture(filter: number): WebGLTexture {
     const gl = this.gl;
     const t = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     return t;
@@ -137,7 +164,7 @@ export class FieldRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.fieldTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, nx, ny, 0, gl.RED, gl.FLOAT, null);
     gl.bindTexture(gl.TEXTURE_2D, this.matTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, nx, ny, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, nx, ny, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   }
 
   uploadField(field: Float32Array): void {
@@ -149,7 +176,7 @@ export class FieldRenderer {
   uploadOverlay(overlay: Uint8Array): void {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.matTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.nx, this.ny, gl.RED_INTEGER, gl.UNSIGNED_BYTE, overlay);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.nx, this.ny, gl.RGBA, gl.UNSIGNED_BYTE, overlay);
   }
 
   /** Matches the drawing buffer to the canvas's CSS size and device pixel ratio. */
@@ -173,6 +200,7 @@ export class FieldRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.matTex);
     gl.uniform1i(this.uniforms.uMat!, 1);
+    gl.uniform2f(this.uniforms.uGrid!, this.nx, this.ny);
     gl.uniform2f(this.uniforms.uPlay!, playW, playH);
     gl.uniform1f(this.uniforms.uPad!, pad);
     gl.uniform1f(this.uniforms.uGain!, this.gain);

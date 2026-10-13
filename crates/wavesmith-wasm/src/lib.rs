@@ -41,7 +41,7 @@ impl Game {
         self.session.field().as_ptr()
     }
 
-    /// Pointer to the material overlay (`width·height` bytes). It moves when pieces change.
+    /// Pointer to the RGBA material overlay (`4·width·height` bytes). It moves when pieces change.
     pub fn overlay_ptr(&self) -> *const u8 {
         self.session.overlay().as_ptr()
     }

@@ -1,17 +1,23 @@
 //! Rasterizes a level's medium, sponge, and pieces into solver material fields, plus a compact
 //! per-cell overlay for the renderer.
+//!
+//! The overlay is RGBA8, four bytes per cell, so the GPU can filter it linearly:
+//! - R: signed distance to the nearest wall surface, mapped from `±OVERLAY_SDF_RANGE` cells to
+//!   `0..=255` (the surface sits at 127.5). Drawing the wall where this crosses zero gives
+//!   smooth, anti-aliased edges that follow the true geometry instead of the cell grid.
+//! - G: absorber coverage, 0..=255 (the absorber's edge is at 50%).
+//! - B: lens strength, 255 for the slowest allowed medium.
+//! - A: 255 where the solver pins the field to zero (the cell-level wall mask).
 
 use crate::level::Level;
 use crate::solver::Materials;
 use crate::tools::{ellipse_rho, Item, V2};
 use crate::SPONGE;
 
-/// Overlay byte for a wall cell.
-pub const OVERLAY_WALL: u8 = 255;
-/// Overlay bit set where an absorber dominates the cell.
-pub const OVERLAY_ABSORBER: u8 = 0x40;
-/// Overlay bits holding the lens strength `0..=63` (63 is the slowest allowed medium).
-pub const OVERLAY_LENS_MASK: u8 = 0x3f;
+/// Bytes per cell in the overlay.
+pub const OVERLAY_CHANNELS: usize = 4;
+/// Wall distances are clamped to this many cells on either side of the surface.
+pub const OVERLAY_SDF_RANGE: f32 = 4.0;
 
 /// Target reflection of the sponge layer for a wave hitting it head-on.
 const SPONGE_REFLECTION: f32 = 1e-4;
@@ -53,6 +59,7 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
     let c0 = level.medium.c;
     let mut m = Materials::uniform(nx, ny, c0, level.medium.damping);
     let mut absorb = vec![0.0f32; nx * ny];
+    let mut wall_sdf = vec![OVERLAY_SDF_RANGE; nx * ny];
 
     // Graded sponge: γ(d) = γmax·(d/L)² with γmax chosen for the target reflection.
     let l = SPONGE as f32;
@@ -73,10 +80,14 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
         let (lo, hi) = item.bounds();
         match *item {
             Item::Wall { .. } | Item::Reflector { .. } => {
+                let r = OVERLAY_SDF_RANGE;
+                let (lo, hi) = ([lo[0] - r, lo[1] - r], [hi[0] + r, hi[1] + r]);
                 for_cells(nx, ny, lo, hi, |i, p| {
-                    if item.distance(p) <= 0.0 {
+                    let d = item.distance(p);
+                    if d <= 0.0 {
                         m.wall[i] = 1;
                     }
+                    wall_sdf[i] = wall_sdf[i].min(d);
                 });
             }
             Item::Absorber { strength, .. } => {
@@ -106,19 +117,19 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
     }
 
     // Overlay.
-    let mut overlay = vec![0u8; nx * ny];
-    for i in 0..nx * ny {
-        overlay[i] = if m.wall[i] != 0 {
-            OVERLAY_WALL
-        } else {
-            let slow = 1.0 - (m.c2[i] / (c0 * c0)).sqrt();
-            let lens = ((slow / 0.75) * 63.0).round().clamp(0.0, 63.0) as u8;
-            lens | if absorb[i] >= 0.5 {
-                OVERLAY_ABSORBER
-            } else {
-                0
-            }
-        };
+    let unit = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let mut overlay = vec![0u8; nx * ny * OVERLAY_CHANNELS];
+    for (i, px) in overlay
+        .as_chunks_mut::<OVERLAY_CHANNELS>()
+        .0
+        .iter_mut()
+        .enumerate()
+    {
+        let slow = 1.0 - (m.c2[i] / (c0 * c0)).sqrt();
+        px[0] = unit((wall_sdf[i] + OVERLAY_SDF_RANGE) / (2.0 * OVERLAY_SDF_RANGE));
+        px[1] = unit(absorb[i]);
+        px[2] = unit(slow / 0.75);
+        px[3] = if m.wall[i] != 0 { 255 } else { 0 };
     }
     // The outer ring is the fixed boundary.
     for x in 0..nx {
