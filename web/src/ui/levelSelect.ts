@@ -39,7 +39,7 @@ export function levelSelectScreen(app: App): Screen {
       return h(
         'button',
         {
-          class: `level-card ${state}`,
+          class: `level-card ${state}${level.medium.light ? ' light' : ''}`,
           disabled: locked,
           'aria-label': `${level.id} ${level.name}${locked ? ' (locked)' : ''}`,
           onclick: () => app.go({ screen: 'play', levelId: level.id }),

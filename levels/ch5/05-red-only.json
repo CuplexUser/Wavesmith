@@ -1,0 +1,71 @@
+{
+  "chapter": 5,
+  "grid": {
+    "width": 400,
+    "height": 250
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02,
+    "light": true
+  },
+  "id": "5-5",
+  "name": "Red Only",
+  "description": "This sensor wants pure red: any green or blue spoils it. Glass traps light that meets its far face too steeply, and blue gets trapped first.",
+  "hint": "Widen the prism's base with its corner handle. Past a certain angle, green and blue reflect inside the glass while red still escapes.",
+  "sources": [
+    {
+      "kind": "beam",
+      "pos": [
+        16,
+        80
+      ],
+      "angle": 0,
+      "width": 20
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        285,
+        170
+      ],
+      "radius": 7,
+      "threshold": 0.24,
+      "hold": 2,
+      "colors": [
+        "red"
+      ]
+    },
+    {
+      "kind": "silence",
+      "pos": [
+        285,
+        170
+      ],
+      "radius": 7,
+      "threshold": 0.1,
+      "hold": 2,
+      "after": 4,
+      "colors": [
+        "green",
+        "blue"
+      ]
+    }
+  ],
+  "inventory": {
+    "prism": {
+      "count": 1,
+      "cost": 2,
+      "maxSize": 120,
+      "material": "flint"
+    }
+  },
+  "budget": 2,
+  "par": {
+    "cost": 2,
+    "energy": 44
+  },
+  "timeLimit": 25
+}

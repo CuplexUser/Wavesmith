@@ -1,14 +1,25 @@
 // The play screen: live field, piece editing, goal HUD, and results.
 
 import type { App, Screen } from '../app';
+import { itemCenter } from '../geometry';
 import { Editor } from '../input/editor';
-import { nextLevel } from '../levels';
+import { chapterLevels, nextLevel } from '../levels';
 import { countOf, remaining, totalCost } from '../placement';
 import { FieldRenderer } from '../render/fieldRenderer';
-import { OverlayRenderer } from '../render/overlay';
+import { colorsHex, OverlayRenderer } from '../render/overlay';
 import { Sim } from '../sim/bridge';
 import { Stepper } from '../sim/stepper';
-import { TOOL_ORDER, type Goal, type Item, type Level, type Status, type ToolKind, type V2 } from '../types';
+import {
+  TOOL_ORDER,
+  type Color,
+  type Goal,
+  type Item,
+  type Level,
+  type Material,
+  type Status,
+  type ToolKind,
+  type V2,
+} from '../types';
 import { h, setStyle, setText } from './dom';
 import { ICONS, TOOL_ICONS, TOOL_NAMES } from './icons';
 
@@ -19,12 +30,33 @@ const GOAL_LABEL: Record<Goal['kind'], string> = {
   sustain: 'Sustain',
 };
 
-function goalText(g: Goal): string {
+const MATERIAL_NAME: Record<Material, string> = {
+  water: 'Water (n 1.28–1.39)',
+  crown: 'Crown glass (n 1.42–1.64)',
+  flint: 'Flint glass (n 1.50–1.85)',
+};
+
+function colorWords(colors: Color[] | undefined): string {
+  if (!colors || colors.length === 3) return 'white';
+  return colors.join(' + ');
+}
+
+function goalLabel(g: Goal, light: boolean): string {
+  if (light && g.kind === 'focus') return `Light · ${colorWords(g.colors)}`;
+  if (light && g.kind === 'silence') return `Dark · ${colorWords(g.colors)}`;
+  return GOAL_LABEL[g.kind];
+}
+
+function goalText(g: Goal, light: boolean): string {
   switch (g.kind) {
     case 'focus':
-      return `Raise the amplitude at the target to ${g.threshold} and hold it ${g.hold}s`;
+      return light
+        ? `Shine ${colorWords(g.colors)} light on the sensor (${g.threshold}) for ${g.hold}s`
+        : `Raise the amplitude at the target to ${g.threshold} and hold it ${g.hold}s`;
     case 'silence':
-      return `Keep the zone below ${g.threshold} for ${g.hold}s once the waves arrive`;
+      return light
+        ? `Keep ${colorWords(g.colors)} light off the zone for ${g.hold}s`
+        : `Keep the zone below ${g.threshold} for ${g.hold}s once the waves arrive`;
     case 'resonate':
       return `Shatter the crystal: it rings at ${g.freq} Hz`;
     case 'sustain':
@@ -48,13 +80,17 @@ class PlayScreen implements Screen {
   private editor: Editor;
   private stepper: Stepper;
   private status: Status;
+  private light: boolean;
   private raf = 0;
   private last = performance.now();
   private overlayDirty = true;
   private announced = false;
+  private timeoutAnnounced = false;
   private resultShown = false;
   private toastTimer: number | undefined;
   private resizeObs: ResizeObserver;
+  /** Cell index of the first goal, for sampling the live wave there. */
+  private probeCell = 0;
 
   // DOM.
   private root: HTMLElement;
@@ -64,6 +100,8 @@ class PlayScreen implements Screen {
   private board = h('div', { class: 'board' });
   private toastEl = h('div', { class: 'toast', role: 'status', 'aria-live': 'polite' });
   private bannerEl = h('div', { class: 'banner', hidden: true });
+  private trashEl = h('div', { class: 'trash-hint', hidden: true }, 'Release to remove');
+  private pieceBar = h('div', { class: 'piece-bar', hidden: true, role: 'toolbar', 'aria-label': 'Selected piece' });
   private paletteEl = h('div', { class: 'palette' });
   private budgetEl = h('div', { class: 'budget' });
   private goalEls: { root: HTMLElement; fill: HTMLElement; hold: HTMLElement; value: HTMLElement }[] = [];
@@ -83,36 +121,59 @@ class PlayScreen implements Screen {
     private level: Level,
   ) {
     this.sim = new Sim(level);
+    this.light = this.sim.isLight;
     this.stepper = new Stepper(this.sim.stepsPerSecond);
     this.status = this.sim.status();
 
     this.board.append(this.glCanvas, this.ovCanvas);
-    this.stage = h('div', { class: 'stage' }, this.board, this.toastEl, this.bannerEl);
+    this.stage = h('div', { class: 'stage' }, this.board, this.pieceBar, this.trashEl, this.toastEl, this.bannerEl);
     this.field = new FieldRenderer(this.glCanvas);
-    this.field.setGrid(this.sim.nx, this.sim.ny);
+    this.field.setGrid(this.sim.nx, this.sim.ny, this.light ? 'light' : 'sound');
+    this.field.gain = this.light ? 2.2 : 1.6;
     this.field.uploadOverlay(this.sim.overlay());
     this.overlay = new OverlayRenderer(this.ovCanvas);
+    const g0 = level.goals[0];
+    if (g0 && 'pos' in g0) {
+      const [x, y] = g0.pos;
+      this.probeCell = (Math.floor(y) + this.sim.border) * this.sim.nx + Math.floor(x) + this.sim.border;
+    }
 
     this.editor = new Editor({
       level,
+      board: this.board,
       toCells: (x, y) => this.toCells(x, y),
       cellsPerPx: () => level.grid.width / Math.max(1, this.board.clientWidth),
       commit: (items) => this.commit(items),
+      preview: (items) => this.preview(items),
       changed: () => this.onEditorChange(),
       redraw: () => {
         this.overlayDirty = true;
+        this.updatePieceBar();
       },
       toast: (m) => this.toast(m),
-      tick: () => app.haptics.pulse(0.1),
+      sound: (kind, item) => {
+        app.audio.edit(kind, item);
+        if (kind === 'place' || kind === 'move') app.haptics.pulse(0.15);
+        if (kind === 'invalid') app.haptics.pulse(0.6);
+      },
     });
     this.editor.attach(this.board);
 
     const btn = (label: string, icon: string, onclick: () => void, cls = 'icon-btn') =>
-      h('button', { class: cls, 'aria-label': label, title: label, html: icon, onclick });
+      h('button', {
+        class: cls,
+        'aria-label': label,
+        title: label,
+        html: icon,
+        onclick: () => {
+          app.audio.click();
+          onclick();
+        },
+      });
     this.pauseBtn = btn('Pause (Space)', ICONS.pause, () => this.togglePause());
     this.fastBtn = btn('Fast forward (F)', ICONS.fast, () => this.toggleFast());
     this.undoBtn = btn('Undo (Ctrl+Z)', ICONS.undo, () => this.editor.undo());
-    this.deleteBtn = btn('Delete piece (Del)', ICONS.trash, () => this.editor.deleteSelected());
+    this.deleteBtn = btn('Remove piece (Del)', ICONS.trash, () => this.editor.deleteSelected());
     const soundBtn = btn('Sound (M)', app.audio.muted ? ICONS.muted : ICONS.sound, () => {
       soundBtn.innerHTML = app.toggleMute() ? ICONS.muted : ICONS.sound;
     });
@@ -122,18 +183,22 @@ class PlayScreen implements Screen {
       const fill = h('div', { class: 'meter-fill' });
       const hold = h('div', { class: 'hold-fill' });
       const value = h('span', { class: 'mono goal-value' });
+      const icon = this.light && g.kind === 'focus' ? ICONS.sensor : ICONS[g.kind];
       const root = h(
         'div',
-        { class: `goal ${g.kind}`, title: goalText(g) },
-        h('span', { class: 'goal-icon', html: ICONS[g.kind] }),
+        { class: `goal ${g.kind}`, title: goalText(g, this.light) },
+        h('span', { class: 'goal-icon', html: icon }),
         h(
           'div',
           { class: 'goal-body' },
-          h('div', { class: 'goal-row' }, h('span', { class: 'goal-label' }, GOAL_LABEL[g.kind]), value),
+          h('div', { class: 'goal-row' }, h('span', { class: 'goal-label' }, goalLabel(g, this.light)), value),
           h('div', { class: 'meter' }, fill, h('div', { class: 'meter-mark' })),
           h('div', { class: 'hold' }, hold),
         ),
       );
+      if (this.light && (g.kind === 'focus' || g.kind === 'silence')) {
+        root.style.setProperty('--goal-color', colorsHex(g.colors));
+      }
       this.goalEls.push({ root, fill, hold, value });
       return root;
     });
@@ -169,7 +234,20 @@ class PlayScreen implements Screen {
           : null,
         this.hintEl,
       ),
-      h('section', { class: 'tools' }, h('h2', { class: 'label' }, 'Pieces'), this.paletteEl, this.budgetEl),
+      h(
+        'section',
+        { class: 'tools' },
+        h('h2', { class: 'label' }, 'Pieces'),
+        this.paletteEl,
+        this.budgetEl,
+        h(
+          'p',
+          { class: 'how' },
+          'Tap a piece to edit it. Drag it off the board, or use ',
+          h('span', { class: 'inline-icon', html: ICONS.trash }),
+          ', to remove it.',
+        ),
+      ),
       this.tuneEl,
       h(
         'section',
@@ -189,15 +267,25 @@ class PlayScreen implements Screen {
       ),
     );
 
-    this.root = h('div', { class: 'screen play' }, topbar, this.stage, panel, this.resultEl);
+    this.root = h(
+      'div',
+      { class: `screen play${this.light ? ' light' : ''}` },
+      topbar,
+      this.stage,
+      panel,
+      this.resultEl,
+    );
     app.root.append(this.root);
 
     this.buildPalette();
+    this.onEditorChange();
     this.resizeObs = new ResizeObserver(() => this.layout());
     this.resizeObs.observe(this.stage);
     this.layout();
     window.addEventListener('keydown', this.onKey);
     app.buckets.reset();
+    const all = app.catalog.chapters.flatMap((c) => chapterLevels(app.catalog, c));
+    app.audio.enterLevel(this.light ? 'light' : 'sound', Math.max(0, all.findIndex((l) => l.id === level.id)));
     this.raf = requestAnimationFrame(this.frame);
   }
 
@@ -226,6 +314,7 @@ class PlayScreen implements Screen {
     this.field.resize(w, hgt, dpr);
     this.overlay.resize(w, hgt, dpr, width);
     this.overlayDirty = true;
+    this.updatePieceBar();
   }
 
   private toCells(clientX: number, clientY: number): V2 {
@@ -246,6 +335,11 @@ class PlayScreen implements Screen {
     return null;
   }
 
+  private preview(items: Item[] | null): void {
+    const overlay = items ? this.sim.previewOverlay(items) : null;
+    this.field.uploadOverlay(overlay ?? this.sim.overlay());
+  }
+
   private restartRun(): void {
     this.sim.reset();
     this.afterRestart();
@@ -255,6 +349,7 @@ class PlayScreen implements Screen {
     this.field.uploadOverlay(this.sim.overlay());
     this.stepper.reset();
     this.announced = false;
+    this.timeoutAnnounced = false;
     this.hideResult();
     this.app.buckets.reset();
     this.status = this.sim.status();
@@ -270,26 +365,33 @@ class PlayScreen implements Screen {
       this.status = this.sim.status();
       this.onStatus();
     }
-    this.field.uploadField(this.sim.field());
+    this.field.uploadField(this.sim.image());
     this.field.draw(this.level.grid.width, this.level.grid.height, this.sim.border);
-    // Source glyphs animate, so the overlay redraws every frame while running.
+    // Glyphs animate, so the overlay redraws every frame while running.
     if (n > 0 || this.overlayDirty) {
       this.overlay.draw({
         level: this.level,
         items: this.editor.items,
         selected: this.editor.selected,
+        hover: this.editor.hover,
         ghost: this.editor.ghost,
         ghostValid: this.editor.ghostValid,
+        blocked: this.editor.blocked,
+        snap: this.editor.snap,
+        trash: this.editor.trash,
         goals: this.status.goals,
         time: this.status.time,
+        resonance: this.sim.resonatorAmplitudes(),
+        handleSize: this.editor.handleSize,
       });
       this.overlayDirty = false;
+      this.trashEl.hidden = !this.editor.trash;
+      this.board.classList.toggle('trash', this.editor.trash);
     }
   };
 
   private onStatus(): void {
     const st = this.status;
-    // HUD.
     st.goals.forEach((g, i) => {
       const el = this.goalEls[i];
       if (!el) return;
@@ -311,24 +413,32 @@ class PlayScreen implements Screen {
     // Sound and haptics follow the first goal.
     const g0 = st.goals[0];
     if (g0) {
-      const level = g0.kind === 'silence' ? Math.min(1.5, g0.value / g0.threshold) * 0.6 : g0.value / g0.threshold;
-      this.app.audio.update(this.level.sources[0]?.freq ?? 3, level);
-      if (g0.kind !== 'silence') this.app.buckets.update(level);
+      const ratio = g0.value / g0.threshold;
+      const kind = g0.kind === 'silence' ? 'silence' : g0.kind === 'focus' ? 'focus' : 'other';
+      const wave = this.light ? 1 : (this.sim.field()[this.probeCell] ?? 0) / g0.threshold;
+      this.app.audio.update(kind, kind === 'silence' ? ratio : ratio, wave);
+      if (g0.kind !== 'silence') this.app.buckets.update(ratio);
     }
 
     if (st.solved && !this.announced) {
       this.announced = true;
       this.app.progress.record(this.level.id, st.solved.stars);
-      this.app.audio.chime();
+      this.app.audio.fanfare(st.solved.stars);
       this.app.haptics.success();
       window.setTimeout(() => this.showResult(), 700);
     }
+    if (st.timedOut && !this.timeoutAnnounced) {
+      this.timeoutAnnounced = true;
+      this.app.audio.timeout();
+    }
     this.bannerEl.hidden = !st.timedOut;
-    if (st.timedOut) {
+    if (st.timedOut && this.bannerEl.childElementCount === 0) {
       this.bannerEl.replaceChildren(
         h('span', {}, 'Out of time. Move a piece or restart the run.'),
         h('button', { class: 'btn small', onclick: () => this.restartRun() }, 'Restart'),
       );
+    } else if (!st.timedOut) {
+      this.bannerEl.replaceChildren();
     }
   }
 
@@ -340,6 +450,58 @@ class PlayScreen implements Screen {
     this.undoBtn.disabled = !this.editor.canUndo;
     this.deleteBtn.disabled = this.editor.selected === null;
     this.buildTune();
+    this.updatePieceBar();
+  }
+
+  /** Floating buttons next to the selected piece: rotate, flip a reflector, remove. */
+  private updatePieceBar(): void {
+    const i = this.editor.selected;
+    const item = i !== null ? this.editor.items[i] : undefined;
+    if (!item || this.editor.dragging) {
+      this.pieceBar.hidden = true;
+      return;
+    }
+    if (this.pieceBar.dataset.for !== `${i}:${item.kind}`) {
+      this.pieceBar.dataset.for = `${i}:${item.kind}`;
+      const b = (label: string, icon: string, fn: () => void, cls = '') =>
+        h('button', {
+          class: `bar-btn ${cls}`,
+          'aria-label': label,
+          title: label,
+          html: icon,
+          onpointerdown: (e: Event) => e.stopPropagation(),
+          onclick: (e: Event) => {
+            e.stopPropagation();
+            fn();
+          },
+        });
+      const rotatable = item.kind !== 'emitter' && item.kind !== 'resonator';
+      this.pieceBar.replaceChildren(
+        ...(rotatable
+          ? [
+              b('Rotate left (Q)', ICONS.rotl, () => this.editor.rotateSelected(-Math.PI / 12)),
+              b('Rotate right (E)', ICONS.rotr, () => this.editor.rotateSelected(Math.PI / 12)),
+            ]
+          : []),
+        ...(item.kind === 'reflector' ? [b('Flip bend (X)', ICONS.flip, () => this.editor.flipSelected())] : []),
+        b('Remove (Del)', ICONS.trash, () => this.editor.deleteSelected(), 'danger'),
+      );
+    }
+    // Position above the piece, inside the stage.
+    const br = this.board.getBoundingClientRect();
+    const sr = this.stage.getBoundingClientRect();
+    const [cx, cy] = itemCenter(item);
+    const top = (item.kind === 'wall' || item.kind === 'reflector'
+      ? Math.min(item.a[1], item.b[1])
+      : cy - ('size' in item ? Math.max(...item.size) / 2 : 'radii' in item ? Math.max(...item.radii) : 6));
+    const x = br.left - sr.left + (cx / this.level.grid.width) * br.width;
+    // Leave a clear gap so the bar never covers the piece or its handles.
+    let y = br.top - sr.top + (top / this.level.grid.height) * br.height - 60;
+    if (y < 4) y = br.top - sr.top + (cy / this.level.grid.height) * br.height + 34;
+    this.pieceBar.hidden = false;
+    const w = this.pieceBar.offsetWidth || 120;
+    setStyle(this.pieceBar, 'left', `${Math.max(4, Math.min(sr.width - w - 4, x - w / 2))}px`);
+    setStyle(this.pieceBar, 'top', `${Math.max(4, y)}px`);
   }
 
   private availableTools(): ToolKind[] {
@@ -352,17 +514,20 @@ class PlayScreen implements Screen {
       const entry = this.level.inventory[kind]!;
       const left = entry.count - countOf(items, kind);
       const canAdd = remaining(this.level, items, kind) > 0;
+      const name = entry.material && kind !== 'prism' && kind !== 'slab' ? `Glass lens` : TOOL_NAMES[kind];
       return h(
         'button',
         {
           class: `tool${this.editor.armed === kind ? ' armed' : ''}`,
           disabled: !canAdd,
           'aria-pressed': this.editor.armed === kind ? 'true' : 'false',
-          title: `${TOOL_NAMES[kind]} (${i + 1})${entry.maxSize ? `, up to ${entry.maxSize} cells` : ''}`,
+          title: `${name} (${i + 1})${entry.maxSize ? `, up to ${entry.maxSize} cells` : ''}${
+            entry.material ? `, ${MATERIAL_NAME[entry.material]}` : ''
+          }`,
           onclick: () => this.armTool(kind),
         },
         h('span', { class: 'tool-icon', html: TOOL_ICONS[kind] }),
-        h('span', { class: 'tool-name' }, TOOL_NAMES[kind]),
+        h('span', { class: 'tool-name' }, name),
         h('span', { class: 'tool-meta mono' }, `×${left} · ${entry.cost}`),
       );
     });
@@ -379,17 +544,25 @@ class PlayScreen implements Screen {
   }
 
   private armTool(kind: ToolKind): void {
+    this.app.audio.click();
     this.editor.arm(kind);
     if (this.editor.armed) {
       this.toast(`Tap the board to place a ${TOOL_NAMES[kind].toLowerCase()}`);
     }
   }
 
-  /** Sliders for tunable pieces (emitter frequency and phase, resonator frequency, lens speed). */
+  /** Sliders for tunable pieces, and the material of glass ones. */
   private buildTune(): void {
     const i = this.editor.selected;
     const item = i !== null ? this.editor.items[i] : undefined;
-    if (!item || !(item.kind === 'emitter' || item.kind === 'resonator' || item.kind === 'lens')) {
+    const tunable =
+      item &&
+      (item.kind === 'emitter' ||
+        item.kind === 'resonator' ||
+        item.kind === 'lens' ||
+        item.kind === 'prism' ||
+        item.kind === 'slab');
+    if (!item || !tunable) {
       this.tuneEl.hidden = true;
       this.tuneEl.replaceChildren();
       return;
@@ -418,12 +591,18 @@ class PlayScreen implements Screen {
       );
     } else if (item.kind === 'resonator') {
       rows.push(slider('Tuning', item.freq, 0.5, 8, 0.05, (v) => `${v.toFixed(2)} Hz`, (v) => ({ ...item, freq: v })));
+    } else if ((item.kind === 'lens' || item.kind === 'prism' || item.kind === 'slab') && item.material) {
+      rows.push(h('p', { class: 'material' }, MATERIAL_NAME[item.material]));
     } else if (item.kind === 'lens') {
       rows.push(
-        slider('Wave speed', item.ratio, 0.3, 1, 0.05, (v) => `${Math.round(v * 100)}%`, (v) => ({ ...item, ratio: v })),
+        slider('Wave speed', item.ratio ?? 1, 0.3, 1, 0.05, (v) => `${Math.round(v * 100)}%`, (v) => ({
+          ...item,
+          ratio: v,
+        })),
       );
     }
-    this.tuneEl.replaceChildren(h('h2', { class: 'label' }, `Tune ${TOOL_NAMES[item.kind]}`), ...rows);
+    const title = item.kind === 'lens' && item.material ? 'Glass lens' : TOOL_NAMES[item.kind];
+    this.tuneEl.replaceChildren(h('h2', { class: 'label' }, title), ...rows);
     this.tuneEl.hidden = false;
   }
 
@@ -439,6 +618,7 @@ class PlayScreen implements Screen {
     this.pauseBtn.innerHTML = this.stepper.paused ? ICONS.play : ICONS.pause;
     this.pauseBtn.classList.toggle('active', this.stepper.paused);
     this.stage.classList.toggle('paused', this.stepper.paused);
+    if (this.stepper.paused) this.app.audio.silence();
   }
 
   private toggleFast(): void {
@@ -487,7 +667,7 @@ class PlayScreen implements Screen {
         this.hintEl.hidden = !this.hintEl.hidden;
         break;
       case 'Escape':
-        if (this.editor.selected === null && !this.editor.armed) this.app.go({ screen: 'select' });
+        this.app.go({ screen: 'select' });
         break;
     }
   };
@@ -498,6 +678,7 @@ class PlayScreen implements Screen {
     const s = this.status.solved;
     if (!s) return;
     this.resultShown = true;
+    this.app.audio.silence();
     const next = nextLevel(this.app.catalog, this.level.id);
     const best = this.app.progress.stars(this.level.id);
     const row = (on: boolean, title: string, detail: string) =>

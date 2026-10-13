@@ -8,11 +8,13 @@ export interface ChapterDef {
   /** Included in the free tier (the full-game unlock arrives with the Android build). */
   free: boolean;
   levels: string[];
+  /** Folder under /levels holding the chapter's files (default `ch<id>`). */
+  dir?: string;
 }
 
 export interface Catalog {
   chapters: ChapterDef[];
-  /** Levels by file stem, e.g. "01-first-bounce". */
+  /** Levels by folder and file stem, e.g. "ch1/01-first-bounce". */
   levels: Map<string, Level>;
 }
 
@@ -22,17 +24,20 @@ export type LevelState = 'locked' | 'open' | 'done';
 export function buildCatalog(chapters: ChapterDef[], modules: Record<string, unknown>): Catalog {
   const levels = new Map<string, Level>();
   for (const [path, mod] of Object.entries(modules)) {
-    const file = path.split('/').pop() ?? '';
+    const parts = path.split('/');
+    const file = parts.pop() ?? '';
+    const dir = parts.pop() ?? '';
     if (!file.endsWith('.json') || file.endsWith('.solution.json')) continue;
-    levels.set(file.replace(/\.json$/, ''), mod as Level);
+    levels.set(`${dir}/${file.replace(/\.json$/, '')}`, mod as Level);
   }
   return { chapters, levels };
 }
 
 /** Levels of a chapter, in order, skipping any whose file is missing. */
 export function chapterLevels(catalog: Catalog, chapter: ChapterDef): Level[] {
+  const dir = chapter.dir ?? `ch${chapter.id}`;
   return chapter.levels.flatMap((stem) => {
-    const l = catalog.levels.get(stem);
+    const l = catalog.levels.get(`${dir}/${stem}`);
     return l ? [l] : [];
   });
 }

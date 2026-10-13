@@ -1,0 +1,18 @@
+{
+  "note": "Slim flint prism in the beam, apex up.",
+  "pieces": [
+    {
+      "kind": "prism",
+      "pos": [
+        175,
+        92
+      ],
+      "size": [
+        75,
+        112
+      ],
+      "angle": 0,
+      "material": "flint"
+    }
+  ]
+}

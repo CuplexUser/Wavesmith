@@ -16,6 +16,7 @@ fn board() -> Vec<Item> {
             radii: [12.0, 8.0],
             angle: 0.4,
             ratio: 0.6,
+            material: None,
         },
         Item::Absorber {
             pos: [60.0, 80.0],

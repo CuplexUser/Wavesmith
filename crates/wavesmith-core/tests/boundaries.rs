@@ -9,7 +9,7 @@ use wavesmith_core::{Item, Session, MAX_SPEED, SPONGE};
 fn sponge_absorbs_outgoing_pulse() {
     let level = open_level(160, 160, 3.0);
     let r = rasterize(&level, &[]);
-    let mut s = Solver::new(&r.materials).unwrap();
+    let mut s = Solver::new(&r.materials[0]).unwrap();
     let c = (SPONGE + 80) as f32;
     gaussian_pulse(&mut s, c, c, 3.0);
     s.step(&[], 0);
@@ -72,13 +72,14 @@ fn walls_stay_pinned_with_sources() {
     let overlay = session.overlay().as_chunks::<OVERLAY_CHANNELS>().0;
     let mut walls = 0;
     for (u, px) in session.field().iter().zip(overlay) {
-        if px[3] == 255 {
+        // Fixed (R) and player (A) wall distances: the surface sits at byte 127.5.
+        let d = px[0].min(px[3]);
+        if *u == 0.0 && d <= 127 {
             walls += 1;
-            assert_eq!(*u, 0.0);
-            // The drawn surface (distance zero, byte 127.5) agrees with the solver's mask.
-            assert!(px[0] <= 128, "wall cell drawn outside the wall");
-        } else {
-            assert!(px[0] >= 127, "open cell drawn inside a wall");
+        }
+        if d <= 126 {
+            // Clearly inside a drawn wall: the solver must pin the field there.
+            assert_eq!(*u, 0.0, "wave inside a drawn wall");
         }
     }
     assert!(walls > 0);

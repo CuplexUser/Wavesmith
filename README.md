@@ -4,9 +4,10 @@ A physics puzzle game about waves. Place walls, reflectors, absorbers, and lense
 silence, and shape waves. Everything on the board is a live 2D wave simulation, so every
 solution is real physics rather than scripted rules.
 
-This is milestone 1, a playable web slice: the Rust solver compiled to WebAssembly, a WebGL2
-renderer, a TypeScript/Vite shell with mouse, keyboard, and touch input, and Chapter 1
-(Reflection, six levels).
+The web version runs the Rust solver compiled to WebAssembly, renders with WebGL2, and has a
+TypeScript/Vite shell with mouse, keyboard, and touch input. Playable now: Chapter 1
+(Reflection, six sound levels) and Chapter 5 (Light, five levels with prisms and glass).
+See [TODO.md](TODO.md) for milestones and priorities.
 
 ## Layout
 
@@ -58,6 +59,24 @@ repository name).
   for this reason.
 - Energy for the third star is the work the sources do until the goal is met.
 
+### Light
+
+Light levels (`"medium": { "light": true }`) solve the same equation three times, for red,
+green, and blue (a 2D TM mode is a scalar wave). The channels share walls (mirrors) and
+absorbers, but glass has a refractive index per color, so dispersion, prisms, lenses, and
+total internal reflection all come out of the solver rather than being scripted.
+
+- Wavelengths are scaled to 12 / 10 / 8.5 cells (red / green / blue) so the grid resolves
+  them, and material dispersion is exaggerated (flint: n = 1.50 / 1.66 / 1.85) so colors
+  separate within one board. The grid's own numerical dispersion adds a little more.
+- Beams are one-way Gaussian sources: two sheets a quarter wavelength apart, the front one a
+  quarter period behind, so their waves cancel backward. They spread by real diffraction.
+- The renderer shows each channel's amplitude envelope, `A² = u² + (u_t/ω)²` (exact for a
+  monochromatic field), mixed additively, plus the green wave's phase as faint wavefronts.
+- Light boards are 400×250 cells with three channels, about six times the work of a sound
+  level. The WASM build uses SIMD; on slow devices the stepper drops to slow motion rather
+  than skipping steps, so results never change.
+
 ## Levels
 
 Levels are JSON (see `levels/ch1/*.json`). Each level has a reference solution next to it, and
@@ -76,22 +95,22 @@ Par energy is set to about 1.15× the reference solution's energy.
 
 | Action | Mouse / keyboard | Touch |
 | --- | --- | --- |
-| Pick a piece | Click it in the panel, or press 1–6 | Tap it in the panel |
+| Pick a piece | Click it in the panel, or press 1–8 | Tap it in the panel |
 | Place | Click the board (drag to position) | Tap the board (drag to position) |
 | Move / reshape | Drag the piece or its handles | Same |
-| Bend a reflector | Drag the diamond handle | Same |
-| Rotate | Q / E (Shift for fine), mouse wheel | Two-finger twist |
+| Bend a reflector | Drag the diamond handle floating off its face; X flips it | Same, or the flip button |
+| Snap | Ends snap to walls, other ends, and 15° steps; hold Shift or Alt for free placement | Automatic |
+| Rotate | Q / E (Shift for fine), mouse wheel, toolbar buttons | Two-finger twist, toolbar |
 | Resize | Shift + wheel | Pinch |
 | Nudge | Arrow keys (Shift ×5) | — |
-| Delete | Delete / Backspace | Long-press |
+| Remove | Delete / Backspace, right-click, toolbar trash, or drag off the board | Toolbar trash, or drag off the board |
 | Undo | Ctrl+Z | Undo button |
 | Pause / restart / fast-forward | Space / R / F | Buttons |
 | Sound / hint | M / H | Buttons |
 
+A move that runs into something it may not cover stops at the last allowed spot; the dashed red
+outline shows where you dragged it.
+
 ## Roadmap
 
-- Chapters 2–5: interference, resonance, refraction, moving sources and the Doppler effect
-- Level editor
-- Android build with Capacitor: Play Games Services, native haptics behind `platform/haptics.ts`,
-  and the one-time full-game unlock
-- WebGPU compute path for larger grids
+See [TODO.md](TODO.md).

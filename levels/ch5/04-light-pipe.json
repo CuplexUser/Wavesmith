@@ -1,0 +1,67 @@
+{
+  "chapter": 5,
+  "grid": {
+    "width": 400,
+    "height": 250
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02,
+    "light": true
+  },
+  "id": "5-4",
+  "name": "Light Pipe",
+  "description": "No mirrors this time. Light hitting the inside of glass at a steep enough angle can't get out: it reflects completely. Turn the beam with prisms alone.",
+  "hint": "A right-angle prism makes a perfect mirror out of its long face. Let the light enter one short face square-on.",
+  "sources": [
+    {
+      "kind": "beam",
+      "pos": [
+        16,
+        60
+      ],
+      "angle": 0,
+      "width": 20
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        0,
+        125
+      ],
+      "b": [
+        290,
+        125
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        70,
+        195
+      ],
+      "radius": 7,
+      "threshold": 0.24,
+      "hold": 2
+    }
+  ],
+  "inventory": {
+    "prism": {
+      "count": 2,
+      "cost": 2,
+      "maxSize": 120,
+      "material": "flint"
+    }
+  },
+  "budget": 4,
+  "par": {
+    "cost": 4,
+    "energy": 96
+  },
+  "timeLimit": 25
+}

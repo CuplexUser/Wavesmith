@@ -11,31 +11,49 @@
         "04-shelter",
         "05-whispering-gallery",
         "06-two-rooms"
-      ]
+      ],
+      "dir": "ch1"
     },
     {
       "id": 2,
       "name": "Interference",
       "free": true,
-      "levels": []
+      "levels": [],
+      "dir": "ch2"
     },
     {
       "id": 3,
       "name": "Resonance",
       "free": false,
-      "levels": []
+      "levels": [],
+      "dir": "ch3"
     },
     {
       "id": 4,
       "name": "Refraction",
       "free": false,
-      "levels": []
+      "levels": [],
+      "dir": "ch4"
     },
     {
       "id": 5,
+      "name": "Light",
+      "free": true,
+      "levels": [
+        "01-periscope",
+        "02-burning-glass",
+        "03-prism",
+        "04-light-pipe",
+        "05-red-only"
+      ],
+      "dir": "ch5"
+    },
+    {
+      "id": 6,
       "name": "Doppler",
       "free": false,
-      "levels": []
+      "levels": [],
+      "dir": "ch6"
     }
   ]
 }

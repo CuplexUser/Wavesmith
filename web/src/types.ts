@@ -2,25 +2,52 @@
 
 export type V2 = [number, number];
 
-export type ToolKind = 'wall' | 'reflector' | 'absorber' | 'lens' | 'resonator' | 'emitter';
+export type ToolKind = 'wall' | 'reflector' | 'absorber' | 'lens' | 'prism' | 'slab' | 'resonator' | 'emitter';
 
-export const TOOL_ORDER: ToolKind[] = ['wall', 'reflector', 'absorber', 'lens', 'resonator', 'emitter'];
+export const TOOL_ORDER: ToolKind[] = ['wall', 'reflector', 'absorber', 'lens', 'prism', 'slab', 'resonator', 'emitter'];
+
+export type Color = 'red' | 'green' | 'blue';
+export const COLORS: Color[] = ['red', 'green', 'blue'];
+
+/** Glass for light levels; each has its own refractive index per color. */
+export type Material = 'water' | 'crown' | 'flint';
 
 export type Item =
   | { kind: 'wall'; a: V2; b: V2; thickness?: number }
   | { kind: 'reflector'; a: V2; b: V2; bulge?: number; thickness?: number }
   | { kind: 'absorber'; pos: V2; size: V2; angle?: number; strength?: number }
-  | { kind: 'lens'; pos: V2; radii: V2; angle?: number; ratio: number }
+  | { kind: 'lens'; pos: V2; radii: V2; angle?: number; ratio?: number; material?: Material }
+  | { kind: 'prism'; pos: V2; size: V2; angle?: number; material?: Material }
+  | { kind: 'slab'; pos: V2; size: V2; angle?: number; material?: Material }
   | { kind: 'resonator'; pos: V2; freq: number; q?: number }
   | { kind: 'emitter'; pos: V2; freq: number; amp?: number; phase?: number };
 
+interface SourceCommon {
+  /** Hz; light levels use each color's own frequency instead. */
+  freq?: number;
+  amp?: number;
+  phase?: number;
+  start?: number;
+  /** Light levels: colors emitted (all three when omitted). */
+  colors?: Color[];
+}
+
 export type SourceDef =
-  | { kind: 'point'; pos: V2; freq: number; amp?: number; phase?: number; start?: number }
-  | { kind: 'line'; a: V2; b: V2; freq: number; amp?: number; phase?: number; start?: number };
+  | ({ kind: 'point'; pos: V2 } & SourceCommon)
+  | ({ kind: 'line'; a: V2; b: V2 } & SourceCommon)
+  | ({ kind: 'beam'; pos: V2; angle: number; width?: number } & SourceCommon);
 
 export type Goal =
-  | { kind: 'focus'; pos: V2; radius: number; threshold: number; hold: number }
-  | { kind: 'silence'; pos: V2; radius: number; threshold: number; hold: number; after?: number | null }
+  | { kind: 'focus'; pos: V2; radius: number; threshold: number; hold: number; colors?: Color[] }
+  | {
+      kind: 'silence';
+      pos: V2;
+      radius: number;
+      threshold: number;
+      hold: number;
+      after?: number | null;
+      colors?: Color[];
+    }
   | { kind: 'resonate'; pos: V2; freq: number; q?: number; threshold: number }
   | {
       kind: 'sustain';
@@ -36,6 +63,8 @@ export interface InventoryEntry {
   count: number;
   cost: number;
   maxSize?: number;
+  /** Material for new glass pieces. */
+  material?: Material;
 }
 
 export interface Level {
@@ -45,7 +74,7 @@ export interface Level {
   description?: string;
   hint?: string;
   grid: { width: number; height: number };
-  medium: { c: number; damping?: number };
+  medium: { c: number; damping?: number; light?: boolean };
   sources: SourceDef[];
   fixed?: Item[];
   goals: Goal[];

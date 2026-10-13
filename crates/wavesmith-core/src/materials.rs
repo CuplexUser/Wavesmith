@@ -2,16 +2,18 @@
 //! per-cell overlay for the renderer.
 //!
 //! The overlay is RGBA8, four bytes per cell, so the GPU can filter it linearly:
-//! - R: signed distance to the nearest wall surface, mapped from `±OVERLAY_SDF_RANGE` cells to
-//!   `0..=255` (the surface sits at 127.5). Drawing the wall where this crosses zero gives
-//!   smooth, anti-aliased edges that follow the true geometry instead of the cell grid.
+//! - R: signed distance to the nearest fixed wall (the level's own), mapped from
+//!   `±OVERLAY_SDF_RANGE` cells to `0..=255` (the surface sits at 127.5). Drawing the wall where
+//!   this crosses zero gives smooth, anti-aliased edges that follow the true geometry instead
+//!   of the cell grid.
 //! - G: absorber coverage, 0..=255 (the absorber's edge is at 50%).
-//! - B: lens strength, 255 for the slowest allowed medium.
-//! - A: 255 where the solver pins the field to zero (the cell-level wall mask).
+//! - B: lens or glass strength, 255 for the slowest allowed medium.
+//! - A: like R, for the player's walls and reflectors, so they can be drawn differently.
 
 use crate::level::Level;
+use crate::light::SOUND_CHANNEL;
 use crate::solver::Materials;
-use crate::tools::{ellipse_rho, Item, V2};
+use crate::tools::{ellipse_rho, Item, Medium, V2};
 use crate::SPONGE;
 
 /// Bytes per cell in the overlay.
@@ -31,7 +33,9 @@ pub fn grid_dims(level: &Level) -> (usize, usize) {
 }
 
 pub struct Rasterized {
-    pub materials: Materials,
+    /// One set of materials per channel (one for sound, red/green/blue for light). Walls and
+    /// damping are shared; wave speed differs in dispersive glass.
+    pub materials: Vec<Materials>,
     pub overlay: Vec<u8>,
 }
 
@@ -59,7 +63,13 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
     let c0 = level.medium.c;
     let mut m = Materials::uniform(nx, ny, c0, level.medium.damping);
     let mut absorb = vec![0.0f32; nx * ny];
-    let mut wall_sdf = vec![OVERLAY_SDF_RANGE; nx * ny];
+    let channels = level.channels();
+    let mut c2 = vec![vec![c0 * c0; nx * ny]; channels];
+    // Distance fields for fixed and player walls, drawn separately.
+    let mut wall_sdf = [
+        vec![OVERLAY_SDF_RANGE; nx * ny],
+        vec![OVERLAY_SDF_RANGE; nx * ny],
+    ];
 
     // Graded sponge: γ(d) = γmax·(d/L)² with γmax chosen for the target reflection.
     let l = SPONGE as f32;
@@ -76,8 +86,10 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
         }
     }
 
-    for item in level.fixed.iter().chain(placed) {
+    let n_fixed = level.fixed.len();
+    for (k, item) in level.fixed.iter().chain(placed).enumerate() {
         let (lo, hi) = item.bounds();
+        let sdf = &mut wall_sdf[usize::from(k >= n_fixed)];
         match *item {
             Item::Wall { .. } | Item::Reflector { .. } => {
                 let r = OVERLAY_SDF_RANGE;
@@ -87,7 +99,7 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
                     if d <= 0.0 {
                         m.wall[i] = 1;
                     }
-                    wall_sdf[i] = wall_sdf[i].min(d);
+                    sdf[i] = sdf[i].min(d);
                 });
             }
             Item::Absorber { strength, .. } => {
@@ -98,18 +110,30 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
                     absorb[i] = absorb[i].max(cover);
                 });
             }
-            Item::Lens {
-                pos,
-                radii,
-                angle,
-                ratio,
-            } => {
-                let edge = 1.5 / radii[0].min(radii[1]);
+            Item::Lens { .. } | Item::Prism { .. } | Item::Slab { .. } => {
+                let medium = item.medium().expect("transparent pieces have a medium");
+                let cover_at = |p: V2| match *item {
+                    Item::Lens {
+                        pos, radii, angle, ..
+                    } => {
+                        let edge = 1.5 / radii[0].min(radii[1]);
+                        smoothstep(1.0 + edge, 1.0 - edge, ellipse_rho(p, pos, radii, angle))
+                    }
+                    _ => smoothstep(1.0, -1.0, item.distance(p)),
+                };
                 for_cells(nx, ny, lo, hi, |i, p| {
-                    let rho = ellipse_rho(p, pos, radii, angle);
-                    let cover = smoothstep(1.0 + edge, 1.0 - edge, rho);
-                    let r = 1.0 + (ratio - 1.0) * cover;
-                    m.c2[i] = m.c2[i].min(c0 * c0 * r * r);
+                    let cover = cover_at(p);
+                    if cover <= 0.0 {
+                        return;
+                    }
+                    for (ch, c2) in c2.iter_mut().enumerate() {
+                        let ratio = match medium {
+                            Medium::Ratio(r) => r,
+                            Medium::Material(mat) => mat.speed_ratio(ch, channels),
+                        };
+                        let r = 1.0 + (ratio - 1.0) * cover;
+                        c2[i] = c2[i].min(c0 * c0 * r * r);
+                    }
                 });
             }
             Item::Resonator { .. } | Item::Emitter { .. } => {}
@@ -125,11 +149,13 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
         .iter_mut()
         .enumerate()
     {
-        let slow = 1.0 - (m.c2[i] / (c0 * c0)).sqrt();
-        px[0] = unit((wall_sdf[i] + OVERLAY_SDF_RANGE) / (2.0 * OVERLAY_SDF_RANGE));
+        let shown = if channels == 3 { SOUND_CHANNEL } else { 0 };
+        let slow = 1.0 - (c2[shown][i] / (c0 * c0)).sqrt();
+        let dist = |d: f32| unit((d + OVERLAY_SDF_RANGE) / (2.0 * OVERLAY_SDF_RANGE));
+        px[0] = dist(wall_sdf[0][i]);
         px[1] = unit(absorb[i]);
         px[2] = unit(slow / 0.75);
-        px[3] = if m.wall[i] != 0 { 255 } else { 0 };
+        px[3] = dist(wall_sdf[1][i]);
     }
     // The outer ring is the fixed boundary.
     for x in 0..nx {
@@ -140,8 +166,9 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
         m.wall[y * nx] = 1;
         m.wall[y * nx + nx - 1] = 1;
     }
-    Rasterized {
-        materials: m,
-        overlay,
-    }
+    let materials = c2
+        .into_iter()
+        .map(|c2| Materials { c2, ..m.clone() })
+        .collect();
+    Rasterized { materials, overlay }
 }

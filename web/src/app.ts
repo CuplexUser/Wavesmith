@@ -1,6 +1,6 @@
 // Shared services and screen routing.
 
-import { ProbeAudio } from './audio/probeAudio';
+import { AudioEngine } from './audio/engine';
 import type { Catalog } from './levels';
 import { AmplitudeBuckets, WebHaptics } from './platform/haptics';
 import { ProgressStore } from './progress/store';
@@ -12,7 +12,7 @@ export interface Screen {
 }
 
 export class App {
-  readonly audio = new ProbeAudio();
+  readonly audio = new AudioEngine();
   readonly haptics = new WebHaptics();
   readonly buckets = new AmplitudeBuckets(this.haptics);
   readonly progress = new ProgressStore();
@@ -42,7 +42,7 @@ export class App {
   go(route: Route): void {
     this.current?.destroy();
     this.root.replaceChildren();
-    this.audio.silence();
+    this.audio.leaveLevel();
     const factory = this.factories.get(route.screen);
     if (!factory) throw new Error(`no screen ${route.screen}`);
     this.current = factory(this, route);

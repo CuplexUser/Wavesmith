@@ -1,0 +1,53 @@
+{
+  "chapter": 5,
+  "grid": {
+    "width": 400,
+    "height": 250
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02,
+    "light": true
+  },
+  "id": "5-2",
+  "name": "Burning Glass",
+  "description": "A wide beam spreads its light thin. Bend it through a glass lens to gather it onto the tiny sensor.",
+  "hint": "A lens bends light most at its edges. Move it closer or farther to slide the focus along the beam.",
+  "sources": [
+    {
+      "kind": "beam",
+      "pos": [
+        16,
+        125
+      ],
+      "angle": 0,
+      "width": 40
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        300,
+        125
+      ],
+      "radius": 4,
+      "threshold": 1.0,
+      "hold": 2
+    }
+  ],
+  "inventory": {
+    "lens": {
+      "count": 1,
+      "cost": 2,
+      "maxSize": 110,
+      "material": "crown"
+    }
+  },
+  "budget": 2,
+  "par": {
+    "cost": 2,
+    "energy": 87
+  },
+  "timeLimit": 25
+}

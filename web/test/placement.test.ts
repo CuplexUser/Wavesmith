@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { arcDist, arcFrom, len, sub } from '../src/geometry';
-import { dragHandle } from '../src/input/handles';
+import { BEND_OFFSET, dragHandle, handlesFor } from '../src/input/handles';
 import { checkPlacements, createItem, pinchDelta, remaining, totalCost, transformItem } from '../src/placement';
 import type { Item, Level, V2 } from '../src/types';
 
@@ -74,13 +74,27 @@ describe('gestures and handles', () => {
     expect(t.b[1]).toBeCloseTo(65);
   });
 
-  it('bends a reflector toward the drag point, at most a half circle', () => {
+  it('bends a reflector from a handle floating off its face, at most a half circle', () => {
     const r: Item = { kind: 'reflector', a: [0, 0], b: [40, 0], bulge: 0 };
     const lvl = { ...level, inventory: { reflector: { count: 1, cost: 1 } } };
-    const bent = dragHandle(lvl, r, 'bulge', [20, 8]);
+    // The handle starts BEND_OFFSET off the middle, so the middle itself stays free for moving.
+    const handle = handlesFor(r).find((h) => h.id === 'bulge')!;
+    expect(handle.pos[1]).toBeCloseTo(BEND_OFFSET);
+    const bent = dragHandle(lvl, r, 'bulge', [20, BEND_OFFSET + 8]);
     expect(bent.kind === 'reflector' && bent.bulge).toBeCloseTo(8);
+    const flat = dragHandle(lvl, r, 'bulge', [20, BEND_OFFSET - 3]);
+    expect(flat.kind === 'reflector' && flat.bulge).toBe(0);
+    const other = dragHandle(lvl, r, 'bulge', [20, -BEND_OFFSET - 5]);
+    expect(other.kind === 'reflector' && other.bulge).toBeCloseTo(-5);
     const max = dragHandle(lvl, r, 'bulge', [20, 90]);
     expect(max.kind === 'reflector' && max.bulge).toBeCloseTo(20);
+  });
+
+  it('keeps the far end fixed when an endpoint is dragged past the size cap', () => {
+    const w = dragHandle(level, wall([100, 50], [120, 50]), 'b', [200, 50]);
+    if (w.kind !== 'wall') throw new Error('expected a wall');
+    expect(w.a).toEqual([100, 50]);
+    expect(w.b[0]).toBeCloseTo(150);
   });
 
   it('stops endpoint drags at the size cap', () => {

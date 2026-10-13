@@ -46,6 +46,33 @@ impl Game {
         self.session.overlay().as_ptr()
     }
 
+    /// Rasterizes the overlay for a layout (JSON array of items) without applying it, and
+    /// returns a pointer to it (`4·width·height` bytes). Used while dragging.
+    pub fn preview_overlay(&mut self, json: &str) -> Result<*const u8, JsError> {
+        let items: Vec<Item> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&format!("pieces JSON: {e}")))?;
+        self.session
+            .preview_overlay(&items)
+            .map(|o| o.as_ptr())
+            .map_err(|e| JsError::new(&e))
+    }
+
+    /// Number of solver channels: 3 (red, green, blue) in light levels, 1 for sound.
+    pub fn channels(&self) -> usize {
+        self.session.channel_count()
+    }
+
+    /// Pointer to the field of one channel (`width·height` f32 values).
+    pub fn channel_field_ptr(&self, channel: usize) -> *const f32 {
+        self.session.channel_field(channel).as_ptr()
+    }
+
+    /// Recomputes the light image and returns a pointer to it: `4·width·height` f32 values,
+    /// the squared amplitude of red, green, and blue per cell, then 0.
+    pub fn light_ptr(&mut self) -> *const f32 {
+        self.session.light_image().as_ptr()
+    }
+
     pub fn step(&mut self, n: u32) {
         self.session.step(n);
     }
@@ -90,7 +117,7 @@ impl Game {
 
     /// Discrete field energy, for diagnostics.
     pub fn field_energy(&self) -> f64 {
-        self.session.solver().energy()
+        self.session.field_energy()
     }
 
     /// Amplitude envelope of each player resonator, in placement order.

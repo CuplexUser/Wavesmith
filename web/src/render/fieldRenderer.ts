@@ -1,10 +1,15 @@
-// WebGL2 renderer: uploads the wave field as an R32F texture and the material overlay as an
-// RGBA8 texture, then colors both in one full-screen pass. The field is filtered by hand with
-// texelFetch so it works without OES_texture_float_linear, which many phones lack; the
-// overlay is 8-bit, so the GPU filters it.
+// WebGL2 renderer: uploads the simulation as a float texture and the material overlay as an
+// RGBA8 texture, then colors both in one full-screen pass. The float texture is filtered by
+// hand with texelFetch so it works without OES_texture_float_linear, which many phones lack;
+// the overlay is 8-bit, so the GPU filters it.
 //
-// Walls are drawn from a signed-distance field (overlay red channel) rather than from the
-// solver's cell mask, so their edges are anti-aliased and follow the true geometry.
+// Two modes:
+// - sound: one signed field shown as warm crests and cool troughs;
+// - light: red/green/blue intensity envelopes mixed additively, with moving wavefronts.
+//
+// Walls are drawn from signed-distance fields rather than the solver's cell mask, so edges are
+// anti-aliased and follow the true geometry. Fixed walls look like stone; the player's walls
+// and reflectors look like polished metal.
 
 const VERT = `#version 300 es
 in vec2 aPos;
@@ -24,74 +29,112 @@ uniform vec2 uPlay;
 uniform float uPad;
 uniform float uGain;
 uniform float uPx;
+uniform int uMode;
 in vec2 vUv;
 out vec4 outColor;
 
 // Must match OVERLAY_SDF_RANGE in wavesmith-core/src/materials.rs.
 const float SDF_RANGE = 4.0;
 
-float f(ivec2 p) { return texelFetch(uField, p, 0).r; }
+vec4 tex(ivec2 p) { return texelFetch(uField, p, 0); }
+
+vec4 sampleField(vec2 g) {
+  ivec2 i0 = ivec2(floor(g));
+  vec2 t = fract(g);
+  return mix(mix(tex(i0), tex(i0 + ivec2(1, 0)), t.x),
+             mix(tex(i0 + ivec2(0, 1)), tex(i0 + ivec2(1, 1)), t.x), t.y);
+}
 
 vec4 mat(vec2 g) { return texture(uMat, (g + 0.5) / uGrid); }
 
-/** Distance in cells to the nearest wall surface, negative inside. */
-float wallDist(vec2 g) { return mat(g).r * (2.0 * SDF_RANGE) - SDF_RANGE; }
+float decode(float v) { return v * (2.0 * SDF_RANGE) - SDF_RANGE; }
 
-void main() {
-  vec2 g = vec2(uPad) + vUv * uPlay - 0.5;
-  ivec2 i0 = ivec2(floor(g));
-  vec2 t = fract(g);
-  float u = mix(mix(f(i0), f(i0 + ivec2(1, 0)), t.x),
-                mix(f(i0 + ivec2(0, 1)), f(i0 + ivec2(1, 1)), t.x), t.y);
+/** Distance in cells to the nearest fixed (x) and player (y) wall surface, negative inside. */
+vec2 wallDist(vec2 g) {
+  vec4 m = mat(g);
+  return vec2(decode(m.r), decode(m.a));
+}
 
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+vec3 soundColor(float u) {
   // Soft-saturating diverging map: warm crests, cool troughs.
   float x = u * uGain;
   float s = pow(abs(x) / (1.0 + abs(x)), 0.9);
   vec3 bg = vec3(0.027, 0.043, 0.082);
-  vec3 warm = vec3(1.0, 0.62, 0.24);
-  vec3 cool = vec3(0.22, 0.72, 1.0);
-  vec3 hue = x >= 0.0 ? warm : cool;
+  vec3 hue = x >= 0.0 ? vec3(1.0, 0.62, 0.24) : vec3(0.22, 0.72, 1.0);
   vec3 col = mix(bg, hue, s);
-  col = mix(col, vec3(1.0, 0.97, 0.9), smoothstep(0.82, 1.0, s) * 0.6);
+  return mix(col, vec3(1.0, 0.97, 0.9), smoothstep(0.82, 1.0, s) * 0.6);
+}
+
+vec3 lightColor(vec4 v) {
+  // Additive mixing of the three channels; the fourth value is the green wave's phase, which
+  // adds faint moving wavefronts inside the beams.
+  vec3 i = max(v.rgb, 0.0) * uGain;
+  vec3 c = i.r * vec3(1.0, 0.13, 0.08) + i.g * vec3(0.10, 1.0, 0.24) + i.b * vec3(0.14, 0.30, 1.0);
+  c *= 0.82 + 0.3 * v.a;
+  vec3 bg = vec3(0.010, 0.013, 0.028);
+  return bg + (1.0 - exp(-c * 1.5));
+}
+
+void main() {
+  vec2 g = vec2(uPad) + vUv * uPlay - 0.5;
+  vec4 v = sampleField(g);
+  vec3 col = uMode == 1 ? lightColor(v) : soundColor(v.r);
 
   // Faint cell grid for a sense of scale.
   vec2 cell = vUv * uPlay;
   vec2 gd = (0.5 - abs(fract(cell / 16.0) - 0.5)) * 16.0;
   float line = 1.0 - smoothstep(0.0, uPx * 1.2, min(gd.x, gd.y));
-  col += vec3(0.05, 0.08, 0.14) * line * 0.35;
+  col += vec3(0.05, 0.08, 0.14) * line * (uMode == 1 ? 0.2 : 0.35);
 
   vec4 m = mat(g);
   // One device pixel, in cells: the width of every anti-aliased edge.
   float aa = uPx;
 
-  // Lens: violet tint scaled by how much it slows waves.
-  col = mix(col, vec3(0.62, 0.42, 1.0), m.b * 0.38);
+  // Slow media: a faint tint (the canvas layer draws the glass itself).
+  vec3 tint = uMode == 1 ? vec3(0.55, 0.7, 0.95) : vec3(0.62, 0.42, 1.0);
+  col = mix(col, tint, m.b * (uMode == 1 ? 0.10 : 0.30));
 
-  // Absorber: darkened and hatched, with its edge at 50% coverage.
+  // Absorbers swallow waves; the canvas layer draws foam over them.
   if (m.g > 0.0) {
     float w = max(fwidth(m.g), 1e-4);
-    float cover = smoothstep(0.5 - w, 0.5 + w, m.g);
-    float phase = fract((gl_FragCoord.x + gl_FragCoord.y) / 9.0);
-    float stripe = smoothstep(0.55, 0.62, phase) * (1.0 - smoothstep(0.9, 0.97, phase));
-    vec3 hatched = col * 0.55 + vec3(0.09, 0.05, 0.12) * stripe;
-    col = mix(col, hatched, cover);
+    col *= 1.0 - 0.45 * smoothstep(0.5 - w, 0.5 + w, m.g);
   }
 
-  float d = wallDist(g);
+  vec2 d2 = wallDist(g);
+  float d = min(d2.x, d2.y);
   if (d < 2.0) {
     // Soft contact shadow cast down and to the right of walls.
-    float ds = wallDist(g - vec2(0.8, 0.8));
-    col *= 1.0 - 0.4 * (1.0 - smoothstep(-0.5, 1.5, ds));
+    vec2 ds2 = wallDist(g - vec2(0.8, 0.8));
+    float ds = min(ds2.x, ds2.y);
+    col *= 1.0 - 0.45 * (1.0 - smoothstep(-0.5, 1.5, ds));
 
     float wall = 1.0 - smoothstep(-0.5 * aa, 0.5 * aa, d);
     if (wall > 0.0) {
+      bool player = d2.y < d2.x;
       // Bevel from the distance gradient (it points out of the wall), lit from the top-left.
-      vec2 grad = vec2(wallDist(g + vec2(0.5, 0.0)) - wallDist(g - vec2(0.5, 0.0)),
-                       wallDist(g + vec2(0.0, 0.5)) - wallDist(g - vec2(0.0, 0.5)));
+      float e = 0.5;
+      vec2 gx = wallDist(g + vec2(e, 0.0)) - wallDist(g - vec2(e, 0.0));
+      vec2 gy = wallDist(g + vec2(0.0, e)) - wallDist(g - vec2(0.0, e));
+      vec2 grad = player ? vec2(gx.y, gy.y) : vec2(gx.x, gy.x);
       vec2 n = grad / max(length(grad), 1e-4);
       float lit = dot(n, vec2(-0.7071, -0.7071));
       float rim = smoothstep(-1.4, -0.1, d);
-      vec3 wallCol = vec3(0.6, 0.66, 0.76) + rim * (0.2 * lit + 0.05);
+      vec3 wallCol;
+      if (player) {
+        // Polished metal: bright core, darker edges, a hard specular along the lit rim, and a
+        // trace of the player's mint at the edges.
+        float core = clamp(-d / 1.6, 0.0, 1.0);
+        wallCol = mix(vec3(0.34, 0.47, 0.50), vec3(0.93, 0.96, 1.0), pow(core, 0.55));
+        wallCol += rim * max(lit, 0.0) * 0.35 - rim * max(-lit, 0.0) * 0.18;
+      } else {
+        // Stone: matte slate with a little grain.
+        float grain = hash(floor(g * 2.0)) * 0.05;
+        wallCol = vec3(0.30, 0.34, 0.42) + grain + rim * (0.16 * lit + 0.03);
+      }
       col = mix(col, wallCol, wall);
     }
   }
@@ -108,6 +151,8 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
   return sh;
 }
 
+export type RenderMode = 'sound' | 'light';
+
 export class FieldRenderer {
   readonly gl: WebGL2RenderingContext;
   private prog: WebGLProgram;
@@ -116,7 +161,8 @@ export class FieldRenderer {
   private uniforms: Record<string, WebGLUniformLocation | null> = {};
   private nx = 0;
   private ny = 0;
-  /** Field-value multiplier before tone mapping. */
+  private mode: RenderMode = 'sound';
+  /** Value multiplier before tone mapping. */
   gain = 1.6;
 
   constructor(readonly canvas: HTMLCanvasElement) {
@@ -132,7 +178,7 @@ export class FieldRenderer {
       throw new Error(`program: ${gl.getProgramInfoLog(prog) ?? 'link failed'}`);
     }
     this.prog = prog;
-    for (const name of ['uField', 'uMat', 'uGrid', 'uPlay', 'uPad', 'uGain', 'uPx']) {
+    for (const name of ['uField', 'uMat', 'uGrid', 'uPlay', 'uPad', 'uGain', 'uPx', 'uMode']) {
       this.uniforms[name] = gl.getUniformLocation(prog, name);
     }
     const buf = gl.createBuffer();
@@ -157,20 +203,27 @@ export class FieldRenderer {
   }
 
   /** Allocates textures for a solver grid of `nx × ny`. */
-  setGrid(nx: number, ny: number): void {
+  setGrid(nx: number, ny: number, mode: RenderMode = 'sound'): void {
     const gl = this.gl;
     this.nx = nx;
     this.ny = ny;
+    this.mode = mode;
     gl.bindTexture(gl.TEXTURE_2D, this.fieldTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, nx, ny, 0, gl.RED, gl.FLOAT, null);
+    if (mode === 'light') {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, nx, ny, 0, gl.RGBA, gl.FLOAT, null);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, nx, ny, 0, gl.RED, gl.FLOAT, null);
+    }
     gl.bindTexture(gl.TEXTURE_2D, this.matTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, nx, ny, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   }
 
+  /** Uploads the sound field (one float per cell) or the light image (four per cell). */
   uploadField(field: Float32Array): void {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.fieldTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.nx, this.ny, gl.RED, gl.FLOAT, field);
+    const format = this.mode === 'light' ? gl.RGBA : gl.RED;
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.nx, this.ny, format, gl.FLOAT, field);
   }
 
   uploadOverlay(overlay: Uint8Array): void {
@@ -204,7 +257,8 @@ export class FieldRenderer {
     gl.uniform2f(this.uniforms.uPlay!, playW, playH);
     gl.uniform1f(this.uniforms.uPad!, pad);
     gl.uniform1f(this.uniforms.uGain!, this.gain);
-    // Grid line width, in cells per device pixel.
+    gl.uniform1i(this.uniforms.uMode!, this.mode === 'light' ? 1 : 0);
+    // Anti-aliasing width, in cells per device pixel.
     gl.uniform1f(this.uniforms.uPx!, playW / this.canvas.width);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }

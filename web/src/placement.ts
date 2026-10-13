@@ -3,15 +3,12 @@
 
 import {
   add,
-  chordNormal,
   controlPoints,
-  dot,
   isObstacle,
   itemCenter,
   itemDistance,
   itemSize,
   len,
-  mid,
   rotate,
   scale,
   sub,
@@ -22,7 +19,7 @@ const SOURCE_CLEARANCE = 3;
 const GOAL_CLEARANCE = 1;
 
 export function sourcePoints(level: Level): V2[] {
-  return level.sources.flatMap((s) => (s.kind === 'point' ? [s.pos] : [s.a, s.b]));
+  return level.sources.flatMap((s) => (s.kind === 'line' ? [s.a, s.b] : [s.pos]));
 }
 
 export function goalZones(level: Level): { pos: V2; radius: number }[] {
@@ -96,6 +93,7 @@ export function createItem(level: Level, kind: ToolKind, p: V2): Item {
   const cap = level.inventory[kind]?.maxSize ?? Infinity;
   const span = (want: number) => Math.min(want, cap);
   const freq = level.sources[0]?.freq ?? 3;
+  const material = level.inventory[kind]?.material;
   switch (kind) {
     case 'wall': {
       const h = span(30) / 2;
@@ -108,9 +106,20 @@ export function createItem(level: Level, kind: ToolKind, p: V2): Item {
     case 'absorber':
       return { kind, pos: p, size: [span(24), Math.min(12, span(24))], angle: 0, strength: 40 };
     case 'lens': {
+      if (material) {
+        // A glass lens: tall and thin, curved on both faces.
+        const r = span(90) / 2;
+        return { kind, pos: p, radii: [r * 0.36, r], angle: 0, material };
+      }
       const r = span(32) / 2;
       return { kind, pos: p, radii: [r, r], angle: 0, ratio: 0.6 };
     }
+    case 'prism': {
+      const s = span(60);
+      return { kind, pos: p, size: [s * 0.8, s], angle: 0, material: material ?? 'crown' };
+    }
+    case 'slab':
+      return { kind, pos: p, size: [span(50), Math.min(20, span(50))], angle: 0, material: material ?? 'crown' };
     case 'resonator':
       return { kind, pos: p, freq, q: 25 };
     case 'emitter':
@@ -133,6 +142,8 @@ export function transformItem(item: Item, angle: number, factor: number): Item {
     case 'reflector':
       return { ...item, a: tp(item.a), b: tp(item.b), bulge: (item.bulge ?? 0) * factor };
     case 'absorber':
+    case 'prism':
+    case 'slab':
       return { ...item, angle: (item.angle ?? 0) + angle, size: scale(item.size, factor) };
     case 'lens':
       return { ...item, angle: (item.angle ?? 0) + angle, radii: scale(item.radii, factor) };
@@ -147,15 +158,6 @@ export function clampSize(level: Level, item: Item): Item {
   const size = itemSize(item);
   if (cap === undefined || size <= cap) return item;
   return transformItem(item, 0, cap / size);
-}
-
-/** Bulge that puts a reflector's apex at (the projection of) `p`, within a half circle. */
-export function bulgeToward(a: V2, b: V2, p: V2): number {
-  const n = chordNormal(a, b);
-  const limit = len(sub(b, a)) / 2;
-  const v = dot(sub(p, mid(a, b)), n);
-  const snapped = Math.abs(v) < 1 ? 0 : v;
-  return Math.max(-limit, Math.min(limit, snapped));
 }
 
 export interface TwoPointer {

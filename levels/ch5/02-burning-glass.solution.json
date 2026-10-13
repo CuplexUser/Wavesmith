@@ -1,0 +1,17 @@
+{
+  "note": "Crown lens about 100 cells before the sensor.",
+  "pieces": [
+    {
+      "kind": "lens",
+      "pos": [
+        200,
+        125
+      ],
+      "radii": [
+        20,
+        54
+      ],
+      "material": "crown"
+    }
+  ]
+}

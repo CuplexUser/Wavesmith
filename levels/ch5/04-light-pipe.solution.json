@@ -1,0 +1,31 @@
+{
+  "note": "Two right-angle prisms used as total-internal-reflection mirrors.",
+  "pieces": [
+    {
+      "kind": "prism",
+      "pos": [
+        327,
+        68
+      ],
+      "size": [
+        110,
+        55
+      ],
+      "angle": -2.35619,
+      "material": "flint"
+    },
+    {
+      "kind": "prism",
+      "pos": [
+        327,
+        187
+      ],
+      "size": [
+        110,
+        55
+      ],
+      "angle": -0.785398,
+      "material": "flint"
+    }
+  ]
+}

@@ -907,3 +907,111 @@ button {
     transition: none !important;
   }
 }
+
+/* ---------- Editing aids ---------- */
+
+.piece-bar {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(12, 19, 34, 0.94);
+  border: 1px solid rgba(94, 242, 194, 0.35);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.9);
+  animation: pop 0.14s ease-out;
+}
+.piece-bar[hidden] {
+  display: none;
+}
+@keyframes pop {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+.bar-btn {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.bar-btn svg {
+  width: 19px;
+  height: 19px;
+}
+.bar-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.bar-btn.danger {
+  color: var(--danger);
+}
+.bar-btn.danger:hover {
+  background: rgba(255, 93, 115, 0.14);
+}
+.trash-hint {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(60, 14, 24, 0.95);
+  border: 1px solid var(--danger);
+  color: #ffd0d7;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 6;
+}
+.trash-hint[hidden] {
+  display: none;
+}
+.board.trash {
+  box-shadow:
+    0 0 0 2px var(--danger),
+    0 0 40px -6px rgba(255, 93, 115, 0.6);
+}
+.how {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+.inline-icon svg {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+}
+.tune .material {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ---------- Light levels ---------- */
+
+.play.light .goal.focus .goal-icon,
+.play.light .goal.silence .goal-icon {
+  color: var(--goal-color, var(--text));
+}
+.play.light .goal.focus .meter-fill {
+  background: var(--goal-color, var(--warm));
+}
+.play.light .board {
+  box-shadow:
+    0 0 0 1px rgba(200, 220, 255, 0.22),
+    0 20px 60px -20px rgba(0, 0, 0, 0.9);
+}
+.level-card.light .level-num {
+  background: linear-gradient(100deg, #ff5a4f, #ffe066, #4dff7a, #5b8cff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

@@ -6,6 +6,7 @@
 
 pub mod goals;
 pub mod level;
+pub mod light;
 pub mod materials;
 pub mod oscillator;
 pub mod scoring;

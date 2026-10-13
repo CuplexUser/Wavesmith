@@ -90,6 +90,49 @@ export function boxSdf(p: V2, pos: V2, size: V2, angle: number): number {
   return len([Math.max(dx, 0), Math.max(dy, 0)]) + Math.min(Math.max(dx, dy), 0);
 }
 
+/** Signed distance to a closed polygon, negative inside (matches `poly_sdf` in the core). */
+export function polySdf(p: V2, verts: V2[]): number {
+  let d = dot(sub(p, verts[0]!), sub(p, verts[0]!));
+  let sign = 1;
+  for (let i = 0, j = verts.length - 1; i < verts.length; j = i, i++) {
+    const vi = verts[i]!;
+    const vj = verts[j]!;
+    const e = sub(vj, vi);
+    const w = sub(p, vi);
+    const t = Math.min(1, Math.max(0, dot(w, e) / dot(e, e)));
+    const b = sub(w, scale(e, t));
+    d = Math.min(d, dot(b, b));
+    const c0 = p[1] >= vi[1];
+    const c1 = p[1] < vj[1];
+    const c2 = e[0] * w[1] > e[1] * w[0];
+    if ((c0 && c1 && c2) || (!c0 && !c1 && !c2)) sign = -sign;
+  }
+  return sign * Math.sqrt(d);
+}
+
+/** Prism corners: base `size[0]`, height `size[1]`, centroid at `pos`, apex up when unrotated. */
+export function prismVertices(pos: V2, size: V2, angle: number): V2[] {
+  const [w, h] = size;
+  const local: V2[] = [
+    [-w / 2, h / 3],
+    [w / 2, h / 3],
+    [0, (-2 * h) / 3],
+  ];
+  return local.map((v) => add(pos, rotate(v, angle)));
+}
+
+/** Corners of a rotated box. */
+export function boxVertices(pos: V2, size: V2, angle: number): V2[] {
+  const [w, h] = [size[0] / 2, size[1] / 2];
+  const local: V2[] = [
+    [-w, -h],
+    [w, -h],
+    [w, h],
+    [-w, h],
+  ];
+  return local.map((v) => add(pos, rotate(v, angle)));
+}
+
 export function ellipseRho(p: V2, pos: V2, radii: V2, angle: number): number {
   const q = rotate(sub(p, pos), -angle);
   return Math.hypot(q[0] / radii[0], q[1] / radii[1]);
@@ -106,6 +149,10 @@ export function itemDistance(item: Item, p: V2): number {
       return boxSdf(p, item.pos, item.size, item.angle ?? 0);
     case 'lens':
       return (ellipseRho(p, item.pos, item.radii, item.angle ?? 0) - 1) * Math.min(...item.radii);
+    case 'prism':
+      return polySdf(p, prismVertices(item.pos, item.size, item.angle ?? 0));
+    case 'slab':
+      return boxSdf(p, item.pos, item.size, item.angle ?? 0);
     case 'resonator':
     case 'emitter':
       return len(sub(p, item.pos));
@@ -123,6 +170,8 @@ export function itemSize(item: Item): number {
     case 'reflector':
       return len(sub(item.b, item.a));
     case 'absorber':
+    case 'prism':
+    case 'slab':
       return Math.max(...item.size);
     case 'lens':
       return 2 * Math.max(...item.radii);

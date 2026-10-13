@@ -1,0 +1,66 @@
+{
+  "chapter": 5,
+  "grid": {
+    "width": 400,
+    "height": 250
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02,
+    "light": true
+  },
+  "id": "5-1",
+  "name": "Periscope",
+  "description": "Light travels in straight lines until something turns it. Use two mirrors to bring the beam around the wall to the sensor.",
+  "hint": "A mirror at 45 degrees turns light through a right angle. Hold Shift while dragging an end to turn off snapping.",
+  "sources": [
+    {
+      "kind": "beam",
+      "pos": [
+        16,
+        60
+      ],
+      "angle": 0,
+      "width": 20
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        0,
+        125
+      ],
+      "b": [
+        290,
+        125
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        70,
+        195
+      ],
+      "radius": 7,
+      "threshold": 0.22,
+      "hold": 2
+    }
+  ],
+  "inventory": {
+    "reflector": {
+      "count": 3,
+      "cost": 1,
+      "maxSize": 100
+    }
+  },
+  "budget": 3,
+  "par": {
+    "cost": 2,
+    "energy": 81
+  },
+  "timeLimit": 25
+}

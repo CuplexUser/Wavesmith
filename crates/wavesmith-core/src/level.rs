@@ -22,6 +22,9 @@ pub struct Medium {
     /// Background damping rate, 1/s.
     #[serde(default)]
     pub damping: f32,
+    /// Light level: solve red, green, and blue channels with dispersive glass.
+    #[serde(default)]
+    pub light: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -32,6 +35,9 @@ pub struct InventoryEntry {
     /// Largest allowed span in cells (segment length, box side, or lens diameter).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_size: Option<f32>,
+    /// Material for new glass pieces (prisms, slabs, and glass lenses).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<crate::light::Material>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -109,6 +115,15 @@ impl Level {
         Ok(level)
     }
 
+    /// Number of solver channels: three (red, green, blue) for light, one for sound.
+    pub fn channels(&self) -> usize {
+        if self.medium.light {
+            3
+        } else {
+            1
+        }
+    }
+
     pub fn size(&self) -> V2 {
         [self.grid.width as f32, self.grid.height as f32]
     }
@@ -135,7 +150,8 @@ impl Level {
             return Err(ctx("at least one source is required".into()));
         }
         for (i, s) in self.sources.iter().enumerate() {
-            s.check().map_err(|m| ctx(format!("source {i}: {m}")))?;
+            s.check(self.medium.light)
+                .map_err(|m| ctx(format!("source {i}: {m}")))?;
             for p in s.points() {
                 if !self.inside(p) {
                     return Err(ctx(format!("source {i} is outside the play area")));

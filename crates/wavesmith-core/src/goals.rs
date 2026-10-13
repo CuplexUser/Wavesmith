@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::light::Color;
 use crate::oscillator::Oscillator;
 use crate::tools::{len, sub, V2};
 use crate::{DT, SPONGE};
@@ -18,6 +19,9 @@ pub enum Goal {
         radius: f32,
         threshold: f32,
         hold: f32,
+        /// Light levels: the colors measured (all three when omitted), averaged.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        colors: Option<Vec<Color>>,
     },
     /// Amplitude in the zone stays at or below `threshold` for `hold` seconds, counted from
     /// `after` seconds (by default, once waves could have crossed the whole board).
@@ -28,6 +32,9 @@ pub enum Goal {
         hold: f32,
         #[serde(default)]
         after: Option<f32>,
+        /// Light levels: the colors that must stay dark (all three when omitted).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        colors: Option<Vec<Color>>,
     },
     /// An object with natural frequency `freq` shatters once its amplitude reaches `threshold`.
     Resonate {
@@ -123,15 +130,16 @@ impl Goal {
     }
 }
 
-/// Mean-square probe over a disk of cells.
+/// Mean-square probe over a disk of cells, averaged over a set of channels.
 #[derive(Debug, Clone)]
 struct Probe {
     cells: Vec<usize>,
+    channels: Vec<usize>,
     ms: f64,
 }
 
 impl Probe {
-    fn disk(pos: V2, radius: f32, nx: usize, ny: usize) -> Probe {
+    fn disk(pos: V2, radius: f32, nx: usize, ny: usize, channels: Vec<usize>) -> Probe {
         let pad = SPONGE as f32;
         let r = radius.max(0.75);
         let x0 = ((pos[0] + pad - r).floor().max(1.0)) as usize;
@@ -147,19 +155,27 @@ impl Probe {
                 }
             }
         }
-        Probe { cells, ms: 0.0 }
+        Probe {
+            cells,
+            channels,
+            ms: 0.0,
+        }
     }
 
-    fn update(&mut self, u: &[f32], alpha: f64) {
-        if self.cells.is_empty() {
+    fn update(&mut self, fields: &[&[f32]], alpha: f64) {
+        if self.cells.is_empty() || self.channels.is_empty() {
             return;
         }
-        let m: f64 = self
-            .cells
-            .iter()
-            .map(|&i| (u[i] as f64) * (u[i] as f64))
-            .sum::<f64>()
-            / self.cells.len() as f64;
+        let mut m = 0.0f64;
+        for &ch in &self.channels {
+            let u = fields[ch];
+            m += self
+                .cells
+                .iter()
+                .map(|&i| (u[i] as f64) * (u[i] as f64))
+                .sum::<f64>();
+        }
+        m /= (self.cells.len() * self.channels.len()) as f64;
         self.ms += (m - self.ms) * alpha;
     }
 
@@ -199,20 +215,40 @@ pub struct Tracker {
 
 impl Tracker {
     /// `period` is the smoothing time constant (about one period of the slowest source);
-    /// `crossing` is the time for a wave to cross the board, the default silence delay.
-    pub fn new(goal: &Goal, nx: usize, ny: usize, period: f32, crossing: f32) -> Tracker {
+    /// `crossing` is the time for a wave to cross the board, the default silence delay;
+    /// `channels` is 3 for light levels and 1 for sound.
+    pub fn new(
+        goal: &Goal,
+        nx: usize,
+        ny: usize,
+        period: f32,
+        crossing: f32,
+        channels: usize,
+    ) -> Tracker {
+        let pick = |colors: &Option<Vec<Color>>| -> Vec<usize> {
+            match (channels, colors) {
+                (3, Some(list)) => list.iter().map(|c| c.index()).collect(),
+                _ => (0..channels).collect(),
+            }
+        };
         let mut probes = Vec::new();
         let mut oscillator = None;
         let mut after = 0.0;
         match goal {
-            Goal::Focus { pos, radius, .. } => probes.push(Probe::disk(*pos, *radius, nx, ny)),
+            Goal::Focus {
+                pos,
+                radius,
+                colors,
+                ..
+            } => probes.push(Probe::disk(*pos, *radius, nx, ny, pick(colors))),
             Goal::Silence {
                 pos,
                 radius,
                 after: a,
+                colors,
                 ..
             } => {
-                probes.push(Probe::disk(*pos, *radius, nx, ny));
+                probes.push(Probe::disk(*pos, *radius, nx, ny, pick(colors)));
                 after = a.unwrap_or(crossing) as f64;
             }
             Goal::Resonate { pos, freq, q, .. } => {
@@ -226,7 +262,7 @@ impl Tracker {
                 ..
             } => {
                 for p in antinodes.iter().chain(nodes) {
-                    probes.push(Probe::disk(*p, *radius, nx, ny));
+                    probes.push(Probe::disk(*p, *radius, nx, ny, pick(&None)));
                 }
             }
         }
@@ -265,12 +301,13 @@ impl Tracker {
     }
 
     /// Updates with the field after a step; `t` is the time after the step.
-    pub fn update(&mut self, u: &[f32], t: f64) {
+    /// `fields` holds the current field of every channel.
+    pub fn update(&mut self, fields: &[&[f32]], t: f64) {
         for p in &mut self.probes {
-            p.update(u, self.alpha);
+            p.update(fields, self.alpha);
         }
         if let Some(o) = &mut self.oscillator {
-            o.step(u);
+            o.step(fields[0]);
         }
         self.met = match &self.goal {
             Goal::Focus { threshold, .. } => self.probes[0].amplitude() >= *threshold,

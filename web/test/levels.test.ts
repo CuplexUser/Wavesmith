@@ -56,9 +56,22 @@ describe('level catalog', () => {
     expect(nextLevel(catalog, '3-1')).toBeNull();
   });
 
-  it('ships chapter 1 as six free levels', () => {
-    const ch1 = (chapters.chapters as ChapterDef[])[0]!;
-    expect(ch1.levels.length).toBe(6);
-    expect(ch1.free).toBe(true);
+  it('ships chapter 1 (sound) and chapter 5 (light) as playable chapters', () => {
+    const defs = chapters.chapters as ChapterDef[];
+    expect(defs[0]!.levels.length).toBe(6);
+    expect(defs[0]!.free).toBe(true);
+    const light = defs.find((c) => c.name === 'Light')!;
+    expect(light.levels.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('keys levels by folder so chapters can reuse file names', () => {
+    const two = buildCatalog(
+      [
+        { id: 1, name: 'A', free: true, levels: ['01-x'] },
+        { id: 2, name: 'B', free: true, levels: ['01-x'] },
+      ],
+      { '../../levels/ch1/01-x.json': lvl('1-1'), '../../levels/ch2/01-x.json': lvl('2-1') },
+    );
+    expect(nextLevel(two, '1-1')?.id).toBe('2-1');
   });
 });

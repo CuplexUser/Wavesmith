@@ -16,6 +16,7 @@ fn random_boards_stay_bounded() {
                 radii: [rng.range(5.0, 25.0), rng.range(5.0, 25.0)],
                 angle: rng.range(0.0, 3.0),
                 ratio: rng.range(0.3, 1.0),
+                material: None,
             });
         }
         items.push(Item::Absorber {

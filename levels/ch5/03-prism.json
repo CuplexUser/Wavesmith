@@ -1,0 +1,69 @@
+{
+  "chapter": 5,
+  "grid": {
+    "width": 400,
+    "height": 250
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02,
+    "light": true
+  },
+  "id": "5-3",
+  "name": "Prism",
+  "description": "White light is every color at once. Glass slows blue more than red, so a prism fans them apart. Send red to the red sensor and blue to the blue one.",
+  "hint": "Light bends toward the thick end of a prism. Turn it to aim the fan.",
+  "sources": [
+    {
+      "kind": "beam",
+      "pos": [
+        16,
+        80
+      ],
+      "angle": 0,
+      "width": 20
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        330,
+        125
+      ],
+      "radius": 7,
+      "threshold": 0.33,
+      "hold": 2,
+      "colors": [
+        "red"
+      ]
+    },
+    {
+      "kind": "focus",
+      "pos": [
+        330,
+        228
+      ],
+      "radius": 7,
+      "threshold": 0.2,
+      "hold": 2,
+      "colors": [
+        "blue"
+      ]
+    }
+  ],
+  "inventory": {
+    "prism": {
+      "count": 1,
+      "cost": 2,
+      "maxSize": 120,
+      "material": "flint"
+    }
+  },
+  "budget": 2,
+  "par": {
+    "cost": 2,
+    "energy": 54
+  },
+  "timeLimit": 25
+}
