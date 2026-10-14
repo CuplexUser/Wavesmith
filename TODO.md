@@ -4,7 +4,8 @@ Milestones run roughly in order; each builds on the last. Within a milestone, it
 by priority (P1 first). Android work starts only once the web version passes the
 "web is good enough" gate at the end of milestone 4.
 
-Legend: `[x]` done · `[~]` in progress · `[ ]` not started
+Legend: `[x]` done · `[~]` in progress · `[ ]` not started · **(you)** needs your accounts,
+devices, or a decision
 
 ---
 
@@ -19,7 +20,7 @@ Legend: `[x]` done · `[~]` in progress · `[ ]` not started
 - [x] Vitest, cargo tests, CI and GitHub Pages workflows
 - [x] Anti-aliased walls from a distance field
 
-## M2 · Feel and light (current)
+## M2 · Feel and light ✅
 
 P1 — fixes and feel the game needs now
 - [x] Light: red/green/blue channels with dispersive glass (water, crown, flint)
@@ -37,61 +38,79 @@ P1 — fixes and feel the game needs now
       glass lenses and prisms tinted by material, speaker emitters, glowing tuning forks
 - [x] Audio: synth voice with reverb, wave-synced pulsing, pentatonic progress, per-material
       placement sounds, invalid buzz, milestone notes, star-dependent fanfare, ambient pad
-- [ ] Chapter 5 · a sixth light level (three color sensors: a full spectrum)
-- [ ] Playtest the light levels on a phone: they run three solvers on a 400×250 board
-      (SIMD WASM); check the frame rate and whether slow motion kicks in
+- [x] Optics accuracy: light levels use an isotropic 9-point stencil with per-color
+      dispersion-corrected speeds (refractive indices exact to 0.6% in every direction) and
+      a 0.6-cell glass edge (Fresnel reflection within ~15%); each color draws its own
+      wavefronts
+- [x] Chapter 5 · a sixth light level: Spectrum (three color sensors)
+- [~] **(you)** Playtest the light levels on a phone: they run three solvers on a 400×250
+      board (SIMD WASM). Settings → Performance stats (or P) shows fps, solver cost, and
+      the slow-motion badge
 
 P2
-- [ ] Light speed: beams cross the board in about 7 s; consider a faster default sim speed
-      for light levels on devices that can afford it
-- [ ] Shrink the WASM binary (now about 510 KB; wasm-opt in CI, trim serde_json)
-- [ ] Settings panel: sound, haptics, reduced motion, color-blind palette
-- [ ] First-run tutorial overlay for Chapter 1
+- [x] Light speed: light levels run up to 2× when the device can afford it (measured)
+- [x] Shrink the WASM binary: 516 KB → 243 KB (106 KB gzipped): wasm-opt from the binaryen
+      dev dependency, JSON parsed through `Value` with hand-written tagged-enum decoding
+- [x] Settings panel: sound, volume, haptics, reduced motion, color-blind palette, stats
+- [x] First-run tutorial overlay for Chapter 1 (replay from Settings)
 
-## M3 · Content: the sound chapters
+## M3 · Content: the sound chapters ✅
 
 P1
-- [ ] Chapter 2 · Interference (silence goals with tunable emitters: phase, frequency)
-- [ ] Chapter 3 · Resonance (resonators, shatter targets, standing waves / sustain goals)
-- [ ] Chapter 4 · Refraction (slow media and lenses for sound and water)
-- [ ] Decide the free tier: Light (Chapter 5) is marked free for now so it can be played
+- [x] Chapter 2 · Interference: 5 levels (phase, strength, and frequency tuning; anti-noise,
+      duct, open window)
+- [x] Chapter 3 · Resonance: 4 levels (shatter targets, standing wave, organ pipe)
+- [x] Chapter 4 · Refraction: 4 levels (sound lens, waveguide, water shoal, prism steering)
+- [ ] **(you)** Decide the free tier. Now: Chapters 1, 2, and 5 free; 3, 4, and 6 paid
+      (`"free"` in `levels/chapters.json`)
 P2
-- [ ] Chapter 6 · Doppler (moving sources; needs moving-source support in the solver)
-- [ ] Per-level display tuning (gain, palette) and level thumbnails on the select screen
+- [x] Chapter 6 · Doppler: 3 levels; moving sources in the solver (Doppler checked by test)
+- [x] Per-level display tuning (`display.gain`, water palette) and schematic thumbnails
 
 ## M4 · Tools and polish
 
 P1
-- [ ] Level editor (place fixed geometry, sources, goals; export JSON; run verify in browser)
-- [ ] Performance pass on low-end phones (profile, adaptive steps per frame, lower DPR)
-- [ ] Accessibility pass (keyboard-only play, screen reader labels, contrast)
+- [x] Level editor (`#/editor`: fixed geometry, sources, goals, inventory, play-test,
+      in-browser verify, JSON import/export)
+- [~] Performance pass: adaptive steps per frame, automatic DPR drop, light speed-up, stats
+      overlay done; **(you)** profile on a low-end phone
+- [x] Accessibility pass: keyboard-only play (Enter places, [ ] selects), screen-reader
+      announcements and labels, text contrast ≥ 4.9:1
 P2
-- [ ] WebGPU compute path for larger grids where supported
-- [ ] Shareable solutions (encode a layout in the URL)
+- [x] WebGPU compute path (display-only boards; gameplay stays on the deterministic core)
+- [x] Shareable solutions (`#/play/<id>?s=<layout>`, Share button)
 
 ### Gate: "web is good enough"
 
 Move on to Android when all of these hold:
-- Chapters 1–6 are playable, tuned, and verified by `cargo test`
-- 60 fps on a mid-range Android phone in Chrome
-- No known input bugs on touch; audio and haptics checked on a real device
-- Playtested by people who didn't build it, with the feedback addressed
+- [x] Chapters 1–6 are playable, tuned, and verified by `cargo test`
+- [ ] **(you)** 60 fps on a mid-range Android phone in Chrome
+- [ ] **(you)** No known input bugs on touch; audio and haptics checked on a real device
+- [ ] **(you)** Playtested by people who didn't build it, with the feedback addressed
 
 ## M5 · Android
 
 P1
-- [ ] Capacitor wrapper around the Vite build (offline assets, no CDN fonts)
-- [ ] Native haptics via the Capacitor Haptics plugin, behind `platform/haptics.ts`
-- [ ] Lifecycle: pause the sim and audio in the background, resume cleanly
-- [ ] Persist progress natively (Capacitor Preferences) with web storage as a fallback
-- [ ] One-time purchase that unlocks the full game (Play Billing); free chapters stay free
+See [docs/android.md](docs/android.md) for the steps that need your Google accounts.
+
+P1
+- [x] Capacitor wrapper around the Vite build (offline assets, no CDN fonts)
+- [x] Native haptics via the Capacitor Haptics plugin, behind `platform/haptics.ts`
+- [x] Lifecycle: pause the sim and audio in the background, resume cleanly; back button
+- [x] Persist progress natively (Capacitor Preferences) with web storage as a fallback
+- [~] One-time purchase that unlocks the full game: Play Billing plugin and unlock flow
+      done; **(you)** create the `full_game` product and test with a license tester
 P2
-- [ ] Play Games Services: sign-in, achievements (stars, chapter completion), cloud save
-- [ ] App icon, splash screen, store listing, screenshots, trailer capture
-- [ ] Release pipeline: signed AAB built in GitHub Actions, internal testing track
+- [~] Play Games Services: plugin for sign-in, achievements, and cloud save done;
+      **(you)** set up Play Games, paste the project ID and achievement IDs
+- [x] App icon, splash screen, store listing draft, screenshots; trailer capture script
+      (**(you)** record on a machine with a GPU and upload to YouTube)
+- [~] Release pipeline: debug APK on every push and signed AAB in GitHub Actions, upload to
+      the internal track; **(you)** add the signing and Play secrets
 
 ## M6 · Launch and after
 
-- [ ] Closed beta on Play, then production release
-- [ ] Web: keep free chapters on GitHub Pages as a demo linking to the store
-- [ ] Future chapters as free updates for buyers
+- [ ] **(you)** Closed beta on Play, then production release
+- [x] Web: free chapters on GitHub Pages as a demo; paid chapters link to the Play listing
+      (update `PLAY_STORE_URL` in `web/src/platform/store.ts` when it is live)
+- [ ] Future chapters as free updates for buyers (the purchase unlocks every chapter)

@@ -1376,3 +1376,21 @@ button {
 .how.keys {
   font-size: 12px;
 }
+
+.unlock-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 179, 87, 0.35);
+  background: rgba(255, 179, 87, 0.06);
+}
+.unlock-banner p {
+  margin: 0;
+  flex: 1 1 260px;
+  color: var(--text-dim);
+  font-size: 14px;
+}

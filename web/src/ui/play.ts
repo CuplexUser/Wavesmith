@@ -124,6 +124,8 @@ class PlayScreen implements Screen {
   /** Screen-reader announcements: goal progress, results, and the selected piece. */
   private srEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' });
   private lastGoalState: string[] = [];
+  /** Paused because the app went to the background. */
+  private autoPaused = false;
   private lastSelection = '';
   private toastEl = h('div', { class: 'toast', role: 'status', 'aria-live': 'polite' });
   private bannerEl = h('div', { class: 'banner', hidden: true });
@@ -336,6 +338,21 @@ class PlayScreen implements Screen {
     if (layout && layout.length > 0) this.loadShared(layout);
     this.onEditorChange();
     this.unlisten = app.onSettings(() => this.applySettings(soundBtn));
+    // Pause in the background and resume as it was (a player's own pause stays).
+    const unActive = app.onActive((active) => {
+      if (!active && !this.stepper.paused) {
+        this.autoPaused = true;
+        this.togglePause();
+      } else if (active && this.autoPaused) {
+        this.autoPaused = false;
+        this.togglePause();
+      }
+    });
+    const unSettings = this.unlisten;
+    this.unlisten = () => {
+      unSettings();
+      unActive();
+    };
     this.applySettings(soundBtn);
     this.resizeObs = new ResizeObserver(() => this.layout());
     this.resizeObs.observe(this.stage);
