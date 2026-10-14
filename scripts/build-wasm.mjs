@@ -1,12 +1,48 @@
 // Builds the Rust core to WebAssembly and generates the JS bindings in web/src/wasm.
-// Usage: node scripts/build-wasm.mjs [--dev]
+// Usage: node scripts/build-wasm.mjs [--dev] [--if-stale]
+//
+// --if-stale skips the build when web/src/wasm was built from the current Rust sources (a
+// hash of crates/**, Cargo.toml, and Cargo.lock is kept next to the output). `pnpm dev` and
+// `pnpm build` use it, so a pull that changes the core can't leave an old build running.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const release = !process.argv.includes('--dev');
 const profile = release ? 'release' : 'debug';
+const stampFile = path.join(root, 'web', 'src', 'wasm', '.source-hash');
+
+/** Hash of everything the WebAssembly is built from. */
+function sourceHash() {
+  const files = [path.join(root, 'Cargo.toml'), path.join(root, 'Cargo.lock')];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== 'target') walk(p);
+      } else if (/\.(rs|toml)$/.test(e.name)) files.push(p);
+    }
+  };
+  walk(path.join(root, 'crates'));
+  const h = createHash('sha256');
+  h.update(profile);
+  for (const f of files.sort()) {
+    h.update(path.relative(root, f));
+    h.update(fs.readFileSync(f));
+  }
+  return h.digest('hex');
+}
+
+const hash = sourceHash();
+if (process.argv.includes('--if-stale')) {
+  const built = fs.existsSync(path.join(root, 'web', 'src', 'wasm', 'wavesmith_bg.wasm'));
+  const stamp = fs.existsSync(stampFile) ? fs.readFileSync(stampFile, 'utf8').trim() : '';
+  if (built && stamp === hash) process.exit(0);
+  console.log(built ? 'Rust core changed; rebuilding the WebAssembly.' : 'Building the WebAssembly core.');
+}
 
 function run(cmd, args, env = process.env) {
   console.log(`> ${cmd} ${args.join(' ')}`);
@@ -39,3 +75,5 @@ if (release) {
     run('wasm-opt', ['-O3', '--enable-simd', '--enable-bulk-memory', '--enable-nontrapping-float-to-int', '-o', file, file]);
   }
 }
+
+fs.writeFileSync(stampFile, `${hash}\n`);
