@@ -19,6 +19,8 @@ export interface Settings {
   perfStats: boolean;
   /** The Chapter 1 walkthrough has been shown. */
   tutorialSeen: boolean;
+  /** Run display-only simulations (the title screen) on the GPU when WebGPU is available. */
+  gpu: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   palette: 'standard',
   perfStats: false,
   tutorialSeen: false,
+  gpu: true,
 };
 
 export interface Progress {

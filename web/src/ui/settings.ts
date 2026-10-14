@@ -12,7 +12,7 @@ export function openSettings(app: App, opts: { onTutorial?: () => void } = {}): 
   const previous = document.activeElement as HTMLElement | null;
   const layer = h('div', { class: 'modal-layer' });
 
-  const toggle = (name: 'muted' | 'haptics' | 'perfStats', label: string, invert = false, note?: string) => {
+  const toggle = (name: 'muted' | 'haptics' | 'perfStats' | 'gpu', label: string, invert = false, note?: string) => {
     const input = h('input', { type: 'checkbox', role: 'switch' });
     input.checked = invert ? !app.settings[name] : app.settings[name];
     input.addEventListener('change', () => {
@@ -130,6 +130,9 @@ export function openSettings(app: App, opts: { onTutorial?: () => void } = {}): 
       'Red, green, and blue light shown as orange, yellow, and blue',
     ),
     toggle('perfStats', 'Performance stats', false, 'Frame rate and solver timing over the board (P)'),
+    'gpu' in navigator
+      ? toggle('gpu', 'Use the GPU for backgrounds', false, 'WebGPU, for the title screen. Levels always run on the exact solver.')
+      : null,
     h('h3', { class: 'label' }, 'Progress'),
     h(
       'div',
