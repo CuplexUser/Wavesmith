@@ -9,9 +9,12 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:native": "tsc --noEmit && WAVESMITH_BASE=./ vite build && cap sync android",
+    "android": "cap open android"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.3",
     "@types/node": "^26.6.5",
     "@webgpu/types": "^0.1.74",
     "binaryen": "132.0.0",
@@ -22,5 +25,12 @@
   "packageManager": "pnpm@11.3.0",
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/haptics": "8.0.2",
+    "@capacitor/preferences": "8.0.1"
   }
 }

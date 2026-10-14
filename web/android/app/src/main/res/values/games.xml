@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Play Games Services project ID (Play Console → Play Games Services → Configuration).
+         Leave the placeholder to build without Play Games; the plugin then stays off. -->
+    <string name="game_services_project_id" translatable="false">REPLACE_WITH_GAMES_PROJECT_ID</string>
+</resources>
