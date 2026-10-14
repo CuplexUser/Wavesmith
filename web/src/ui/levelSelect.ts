@@ -26,7 +26,7 @@ function thumb(level: Level): HTMLCanvasElement {
 
 export function levelSelectScreen(app: App): Screen {
   thumbs.length = 0;
-  const states = levelStates(app.catalog, (id) => app.progress.stars(id), import.meta.env.DEV);
+  const states = levelStates(app.catalog, (id) => app.progress.stars(id), app.unlocked);
   const sections = app.catalog.chapters.map((ch) => {
     const levels = chapterLevels(app.catalog, ch);
     const earned = levels.reduce((a, l) => a + app.progress.stars(l.id), 0);

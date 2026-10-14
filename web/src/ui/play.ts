@@ -597,7 +597,7 @@ class PlayScreen implements Screen {
     if (st.solved && !this.announced) {
       this.announce(`Solved with ${st.solved.stars} of 3 stars.`);
       this.announced = true;
-      if (!this.custom) this.app.progress.record(this.level.id, st.solved.stars);
+      if (!this.custom) this.app.recordResult(this.level.id, st.solved.stars);
       this.app.audio.fanfare(st.solved.stars);
       this.app.haptics.success();
       window.setTimeout(() => this.showResult(), 700);

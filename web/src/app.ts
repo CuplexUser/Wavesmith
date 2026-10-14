@@ -2,8 +2,11 @@
 
 import { AudioEngine } from './audio/engine';
 import type { Catalog } from './levels';
-import { AmplitudeBuckets, WebHaptics } from './platform/haptics';
-import { ProgressStore, type Settings } from './progress/store';
+import { earnedAchievements, type Games } from './platform/games';
+import { AmplitudeBuckets, type Haptics } from './platform/haptics';
+import type { Lifecycle } from './platform/native';
+import type { Store } from './platform/store';
+import { ProgressStore, type Progress, type Settings, type StorageLike } from './progress/store';
 import { setPalette } from './render/palette';
 import { decodeLayout } from './share';
 import type { Item } from './types';
@@ -21,11 +24,25 @@ export interface Screen {
   destroy(): void;
 }
 
+/** Device services: web implementations in the browser, Capacitor plugins in the app. */
+export interface Platform {
+  haptics: Haptics & { enabled: boolean };
+  storage: StorageLike | null;
+  lifecycle: Lifecycle;
+  store: Store;
+  games: Games;
+}
+
 export class App {
   readonly audio = new AudioEngine();
-  readonly haptics = new WebHaptics();
-  readonly buckets = new AmplitudeBuckets(this.haptics);
-  readonly progress = new ProgressStore();
+  readonly haptics: Haptics & { enabled: boolean };
+  readonly buckets: AmplitudeBuckets;
+  readonly progress: ProgressStore;
+  readonly store: Store;
+  readonly games: Games;
+  private route: Route = { screen: 'title' };
+  private activeListeners = new Set<(active: boolean) => void>();
+  private cloudTimer: number | undefined;
   private current: Screen | null = null;
   private settingsListeners = new Set<() => void>();
   private systemReducedMotion =
@@ -35,7 +52,18 @@ export class App {
   constructor(
     readonly root: HTMLElement,
     readonly catalog: Catalog,
+    readonly platform: Platform,
   ) {
+    this.haptics = platform.haptics;
+    this.buckets = new AmplitudeBuckets(this.haptics);
+    this.progress = new ProgressStore(platform.storage);
+    this.store = platform.store;
+    this.games = platform.games;
+    platform.lifecycle.onActive((active) => {
+      if (!active) this.audio.suspend();
+      for (const fn of this.activeListeners) fn(active);
+    });
+    platform.lifecycle.onBack(() => this.back());
     this.applySettings();
     this.systemReducedMotion?.addEventListener('change', () => this.applySettings());
     // Browsers only allow audio after a user gesture.
@@ -51,7 +79,63 @@ export class App {
     this.factories.set(screen, factory);
   }
 
+  /** Unlocks every level: a dev build, or the full game was bought. */
+  get unlocked(): boolean {
+    return import.meta.env.DEV || this.progress.fullGame;
+  }
+
+  /** Calls `fn` when the app goes to the background (false) or returns (true). */
+  onActive(fn: (active: boolean) => void): () => void {
+    this.activeListeners.add(fn);
+    return () => this.activeListeners.delete(fn);
+  }
+
+  /** Android back button: close a dialog, else step back a screen; false exits the app. */
+  private back(): boolean {
+    const modal = document.querySelector<HTMLButtonElement>('.modal-layer .modal-head .icon-btn');
+    if (modal) {
+      modal.click();
+      return true;
+    }
+    switch (this.route.screen) {
+      case 'play':
+        this.go(this.route.custom ? { screen: 'editor' } : { screen: 'select' });
+        return true;
+      case 'select':
+      case 'editor':
+        this.go({ screen: 'title' });
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** Records a result; on improvement, unlocks achievements and updates the cloud save. */
+  recordResult(levelId: string, stars: number): void {
+    if (!this.progress.record(levelId, stars)) return;
+    void this.games.sync(earnedAchievements(this.catalog, (id) => this.progress.stars(id)));
+    window.clearTimeout(this.cloudTimer);
+    this.cloudTimer = window.setTimeout(() => void this.games.save(JSON.stringify(this.progress.snapshot())), 2000);
+  }
+
+  /** Startup work for the app: restore a purchase and merge the cloud save. */
+  async syncAccounts(): Promise<void> {
+    if (this.store.available && (await this.store.restore())) this.progress.setFullGame(true);
+    if (this.games.available && (await this.games.signedIn())) {
+      const cloud = await this.games.load();
+      if (cloud) {
+        try {
+          this.progress.merge(JSON.parse(cloud) as Progress);
+        } catch {
+          // Unreadable cloud save: keep the local one, which overwrites it on the next result.
+        }
+      }
+      await this.games.sync(earnedAchievements(this.catalog, (id) => this.progress.stars(id)));
+    }
+  }
+
   go(route: Route): void {
+    this.route = route;
     this.current?.destroy();
     this.root.replaceChildren();
     this.audio.leaveLevel();
