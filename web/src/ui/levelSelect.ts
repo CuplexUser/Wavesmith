@@ -3,6 +3,7 @@
 import type { App, Screen } from '../app';
 import type { Level } from '../types';
 import { chapterLevels, levelStates } from '../levels';
+import { PLAY_STORE_URL } from '../platform/store';
 import { drawThumbnail } from '../render/thumbnail';
 import { h } from './dom';
 import { openSettings } from './settings';
@@ -24,9 +25,43 @@ function thumb(level: Level): HTMLCanvasElement {
   return canvas;
 }
 
+/** The way into the paid chapters: the Play purchase in the app, the store listing on the web. */
+function unlockBanner(app: App): HTMLElement {
+  const box = h('div', { class: 'unlock-banner' });
+  if (app.store.available) {
+    const buy = h('button', { class: 'btn primary small' }, 'Unlock the full game');
+    void app.store.price().then((p) => {
+      if (p) buy.textContent = `Unlock the full game · ${p}`;
+    });
+    buy.addEventListener('click', async () => {
+      buy.disabled = true;
+      const r = await app.store.buy();
+      buy.disabled = false;
+      if (r === 'owned') {
+        app.progress.setFullGame(true);
+        app.go({ screen: 'select' });
+      }
+    });
+    const restore = h('button', { class: 'link-btn' }, 'Restore purchase');
+    restore.addEventListener('click', async () => {
+      if (await app.store.restore()) {
+        app.progress.setFullGame(true);
+        app.go({ screen: 'select' });
+      } else restore.textContent = 'No purchase found';
+    });
+    box.append(h('p', {}, 'Part of the full game: one purchase opens every chapter, now and to come.'), buy, restore);
+  } else {
+    box.append(
+      h('p', {}, 'Part of the full game on Android. The free chapters stay free on the web.'),
+      h('a', { class: 'btn small', href: PLAY_STORE_URL, target: '_blank', rel: 'noopener' }, 'Get it on Google Play'),
+    );
+  }
+  return box;
+}
+
 export function levelSelectScreen(app: App): Screen {
   thumbs.length = 0;
-  const states = levelStates(app.catalog, (id) => app.progress.stars(id), import.meta.env.DEV);
+  const states = levelStates(app.catalog, (id) => app.progress.stars(id), app.unlocked);
   const sections = app.catalog.chapters.map((ch) => {
     const levels = chapterLevels(app.catalog, ch);
     const earned = levels.reduce((a, l) => a + app.progress.stars(l.id), 0);
@@ -37,6 +72,7 @@ export function levelSelectScreen(app: App): Screen {
       h('h2', {}, ch.name),
       levels.length > 0 ? h('span', { class: 'chapter-stars' }, `${earned} / ${levels.length * 3}`) : null,
     );
+    const paidLocked = !ch.free && !app.unlocked && levels.length > 0;
     if (levels.length === 0) {
       return h(
         'section',
@@ -62,7 +98,13 @@ export function levelSelectScreen(app: App): Screen {
         locked ? h('span', { class: 'lock', html: ICONS.lock }) : stars(app.progress.stars(level.id)),
       );
     });
-    return h('section', { class: 'chapter' }, header, h('div', { class: 'level-grid' }, ...cards));
+    return h(
+      'section',
+      { class: 'chapter' },
+      header,
+      paidLocked ? unlockBanner(app) : null,
+      h('div', { class: 'level-grid' }, ...cards),
+    );
   });
 
   const root = h(

@@ -19,6 +19,8 @@ export interface Settings {
   perfStats: boolean;
   /** The Chapter 1 walkthrough has been shown. */
   tutorialSeen: boolean;
+  /** Run display-only simulations (the title screen) on the GPU when WebGPU is available. */
+  gpu: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -29,12 +31,15 @@ export const DEFAULT_SETTINGS: Settings = {
   palette: 'standard',
   perfStats: false,
   tutorialSeen: false,
+  gpu: true,
 };
 
 export interface Progress {
   stars: Record<string, number>;
   /** Player settings that should survive reloads. */
   settings?: Partial<Settings>;
+  /** The full game was bought (Android); kept so paid chapters open offline. */
+  fullGame?: boolean;
   /** Older saves kept these two at the top level. */
   muted?: boolean;
   haptics?: boolean;
@@ -107,6 +112,16 @@ export class ProgressStore {
     this.write();
   }
 
+  get fullGame(): boolean {
+    return this.data.fullGame ?? false;
+  }
+
+  setFullGame(owned: boolean): void {
+    if (this.data.fullGame === owned) return;
+    this.data.fullGame = owned;
+    this.write();
+  }
+
   /** Forgets every star (settings stay). */
   resetProgress(): void {
     this.data.stars = {};
@@ -127,6 +142,7 @@ export class ProgressStore {
       if (typeof n === 'number' && n > this.stars(id)) this.data.stars[id] = Math.min(3, Math.floor(n));
     }
     this.data.settings = { ...other.settings, ...this.data.settings };
+    if (other.fullGame) this.data.fullGame = true;
     this.write();
   }
 

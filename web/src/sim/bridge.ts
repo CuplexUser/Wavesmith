@@ -75,6 +75,11 @@ export class Sim {
     }
   }
 
+  /** A copy of one solver coefficient array (see `Game.gpu_coeff_ptr`), for the GPU path. */
+  gpuCoefficients(channel: number, which: number): Float32Array {
+    return new Float32Array(memory!.buffer, this.game.gpu_coeff_ptr(channel, which), this.nx * this.ny).slice();
+  }
+
   step(n: number): void {
     if (n > 0) this.game.step(n);
   }

@@ -1,6 +1,9 @@
 import './styles.css';
 
 import { App } from './app';
+import { createGames } from './platform/games';
+import { createHaptics, createLifecycle, createStorage } from './platform/native';
+import { createStore } from './platform/store';
 import { loadCatalog } from './levels';
 import { loadCore } from './sim/bridge';
 import { levelEditorScreen } from './ui/levelEditor';
@@ -11,8 +14,15 @@ import { titleScreen } from './ui/title';
 async function boot(): Promise<void> {
   const root = document.getElementById('app')!;
   try {
-    const [catalog] = await Promise.all([loadCatalog(), loadCore()]);
-    const app = new App(root, catalog);
+    const [catalog, haptics, storage, lifecycle, games] = await Promise.all([
+      loadCatalog(),
+      createHaptics(),
+      createStorage(),
+      createLifecycle(),
+      createGames(),
+      loadCore(),
+    ]);
+    const app = new App(root, catalog, { haptics, storage, lifecycle, store: createStore(), games });
     app.register('title', (a) => titleScreen(a));
     app.register('select', (a) => levelSelectScreen(a));
     app.register('play', (a, r) =>
@@ -22,6 +32,9 @@ async function boot(): Promise<void> {
     app.go(app.routeFromHash());
     // Browser back/forward and edited URLs.
     window.addEventListener('hashchange', () => app.go(app.routeFromHash()));
+    // Purchases and cloud saves load in the background; the select screen reflects them
+    // the next time it opens.
+    void app.syncAccounts();
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);

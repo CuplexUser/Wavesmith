@@ -3,6 +3,7 @@
 import type { App, Screen } from '../app';
 import { FieldRenderer } from '../render/fieldRenderer';
 import { Sim } from '../sim/bridge';
+import { GpuSolver } from '../sim/gpuSolver';
 import { Stepper } from '../sim/stepper';
 import type { Level } from '../types';
 import { h } from './dom';
@@ -82,6 +83,22 @@ export function titleScreen(app: App): Screen {
   } catch (e) {
     console.warn('Title background disabled:', e);
   }
+  // The background is display-only, so it may run on the GPU when WebGPU is available
+  // (gameplay always uses the deterministic WASM core). Until it is ready, the core runs it.
+  let gpu: GpuSolver | null = null;
+  let disposed = false;
+  if (sim && app.settings.gpu) {
+    void GpuSolver.create(sim)
+      .then((g) => {
+        if (disposed) g?.dispose();
+        else if (g) {
+          // Catch up to the core's warm-up so the pattern doesn't restart.
+          g.step(sim!.stepsPerSecond * 4);
+          gpu = g;
+        }
+      })
+      .catch(() => {});
+  }
   const stepper = new Stepper(sim?.stepsPerSecond ?? 120);
   stepper.speed = 0.6;
   let last = performance.now();
@@ -91,9 +108,15 @@ export function titleScreen(app: App): Screen {
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     renderer.resize(DEMO.grid.width * 3, DEMO.grid.height * 3, dpr);
     // Reduced motion: a still frame of the pattern.
-    if (!app.reducedMotion) sim.step(stepper.advance(now - last));
+    const n = app.reducedMotion ? 0 : stepper.advance(now - last);
     last = now;
-    renderer.uploadField(sim.field());
+    if (gpu) {
+      gpu.step(n);
+      renderer.uploadField(gpu.field());
+    } else {
+      sim.step(n);
+      renderer.uploadField(sim.field());
+    }
     renderer.draw(DEMO.grid.width, DEMO.grid.height, sim.border);
   };
   raf = requestAnimationFrame(frame);
@@ -101,6 +124,8 @@ export function titleScreen(app: App): Screen {
   return {
     destroy() {
       cancelAnimationFrame(raf);
+      disposed = true;
+      gpu?.dispose();
       sim?.dispose();
     },
   };

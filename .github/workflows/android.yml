@@ -1,0 +1,103 @@
+name: Android
+
+# Builds the Capacitor Android app. Every push gets a debug APK (as a workflow artifact) so
+# the native code is always compiled. With the signing secrets set, a signed release AAB is
+# built too, and a manual run can upload it to Play's internal testing track.
+#
+# Secrets (see docs/android.md):
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#   PLAY_SERVICE_ACCOUNT_JSON (only for uploading to Play)
+
+on:
+  push:
+    paths:
+      - 'web/**'
+      - 'crates/**'
+      - 'levels/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: 'Upload the release AAB to the internal testing track'
+        type: boolean
+        default: false
+
+env:
+  WASM_BINDGEN_VERSION: 0.2.129
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      WAVESMITH_VERSION_CODE: ${{ github.run_number }}
+      WAVESMITH_VERSION_NAME: 0.1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal -t wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@${{ env.WASM_BINDGEN_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      # GitHub's Ubuntu runners ship the Android SDK (ANDROID_HOME).
+      - name: Check the Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" | tail -3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm wasm
+      - name: Build the web app and sync it into Android
+        run: pnpm build:native
+
+      - name: Debug APK
+        working-directory: web/android
+        run: ./gradlew --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wavesmith-debug-apk
+          path: web/android/app/build/outputs/apk/debug/*.apk
+
+      - name: Signed release AAB
+        id: release
+        if: ${{ env.HAS_KEY == 'true' }}
+        working-directory: web/android
+        env:
+          WAVESMITH_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          WAVESMITH_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          WAVESMITH_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          WAVESMITH_KEYSTORE="$RUNNER_TEMP/upload.jks" ./gradlew --no-daemon bundleRelease
+          rm "$RUNNER_TEMP/upload.jks"
+      - uses: actions/upload-artifact@v4
+        if: ${{ steps.release.outcome == 'success' }}
+        with:
+          name: wavesmith-release-aab
+          path: web/android/app/build/outputs/bundle/release/*.aab
+
+      - name: Upload to the internal testing track
+        if: ${{ steps.release.outcome == 'success' && inputs.upload }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: se.cuplex.wavesmith
+          releaseFiles: web/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed

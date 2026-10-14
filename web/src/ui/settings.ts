@@ -8,11 +8,37 @@ import { ICONS } from './icons';
 
 type Choice<T> = { value: T; label: string };
 
+/** Play Games sign-in and achievements. */
+function playGamesRow(app: App): HTMLElement {
+  const row = h('div', { class: 'setting-actions' });
+  const render = async () => {
+    const signedIn = await app.games.signedIn();
+    row.replaceChildren(
+      signedIn
+        ? h('button', { class: 'btn small', type: 'button', onclick: () => void app.games.showAchievements() }, 'Achievements')
+        : h(
+            'button',
+            {
+              class: 'btn small',
+              type: 'button',
+              onclick: async () => {
+                if (await app.games.signIn()) await app.syncAccounts();
+                void render();
+              },
+            },
+            'Sign in to Play Games',
+          ),
+    );
+  };
+  void render();
+  return row;
+}
+
 export function openSettings(app: App, opts: { onTutorial?: () => void } = {}): void {
   const previous = document.activeElement as HTMLElement | null;
   const layer = h('div', { class: 'modal-layer' });
 
-  const toggle = (name: 'muted' | 'haptics' | 'perfStats', label: string, invert = false, note?: string) => {
+  const toggle = (name: 'muted' | 'haptics' | 'perfStats' | 'gpu', label: string, invert = false, note?: string) => {
     const input = h('input', { type: 'checkbox', role: 'switch' });
     input.checked = invert ? !app.settings[name] : app.settings[name];
     input.addEventListener('change', () => {
@@ -130,6 +156,31 @@ export function openSettings(app: App, opts: { onTutorial?: () => void } = {}): 
       'Red, green, and blue light shown as orange, yellow, and blue',
     ),
     toggle('perfStats', 'Performance stats', false, 'Frame rate and solver timing over the board (P)'),
+    'gpu' in navigator
+      ? toggle('gpu', 'Use the GPU for backgrounds', false, 'WebGPU, for the title screen. Levels always run on the exact solver.')
+      : null,
+    app.games.available || app.store.available ? h('h3', { class: 'label' }, 'Google Play') : null,
+    app.games.available ? playGamesRow(app) : null,
+    app.store.available
+      ? h(
+          'div',
+          { class: 'setting-actions' },
+          h(
+            'button',
+            {
+              class: 'btn small',
+              type: 'button',
+              onclick: async (e: Event) => {
+                const b = e.currentTarget as HTMLButtonElement;
+                const owned = await app.store.restore();
+                if (owned) app.progress.setFullGame(true);
+                b.textContent = owned ? 'Full game restored' : 'No purchase found';
+              },
+            },
+            'Restore purchase',
+          ),
+        )
+      : null,
     h('h3', { class: 'label' }, 'Progress'),
     h(
       'div',
