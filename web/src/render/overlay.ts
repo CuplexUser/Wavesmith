@@ -2,9 +2,10 @@
 // (glass, foam, speakers, tuning forks), selection, and edit handles. Walls and reflectors are
 // drawn by the shader from distance fields. Drawing happens in play-area cell coordinates.
 
-import { arcFrom, boxVertices, itemCenter, prismVertices } from '../geometry';
+import { arcFrom, boxVertices, itemCenter, motionAt, motionRect, motionStop, prismVertices, type Rect } from '../geometry';
 import { handlesFor } from '../input/handles';
-import type { Color, GoalStatus, Item, Level, Material, SourceDef, V2 } from '../types';
+import { colorsHex, lightHex } from './palette';
+import type { GoalStatus, Item, Level, Material, SourceDef, V2 } from '../types';
 
 export const COLORS = {
   piece: '#5ef2c2',
@@ -16,11 +17,7 @@ export const COLORS = {
   handle: '#f4f7ff',
 };
 
-export const LIGHT_COLORS: Record<Color, string> = {
-  red: '#ff5a4f',
-  green: '#4dff7a',
-  blue: '#5b8cff',
-};
+
 
 const GLASS_TINT: Record<Material, string> = {
   water: '90, 190, 255',
@@ -43,29 +40,31 @@ export interface OverlayState {
   /** The dragged piece will be removed on release. */
   trash: boolean;
   goals: GoalStatus[];
-  /** Simulated time, for animating glyphs. */
+  /** Time for animating glyphs (frozen at 0 for reduced motion). */
   time: number;
+  /** Simulated time, for placing moving sources. */
+  simTime: number;
   /** Amplitude of each player resonator, in placement order. */
   resonance: number[];
   /** Handle radius in CSS pixels (bigger for touch). */
   handleSize: number;
+  /** Tool being placed, so its allowed area can be shown. */
+  armed?: string | null;
 }
 
-/** Display color for a set of light colors (white when all three or unspecified). */
-export function colorsHex(colors: Color[] | undefined): string {
-  if (!colors || colors.length === 3) return '#f4f7ff';
-  if (colors.length === 1) return LIGHT_COLORS[colors[0]!];
-  const has = (c: Color) => colors.includes(c);
-  if (has('red') && has('green')) return '#ffe066';
-  if (has('red') && has('blue')) return '#e66bff';
-  return '#5ff0ff';
-}
 
 export class OverlayRenderer {
   private ctx: CanvasRenderingContext2D;
   /** CSS pixels per cell. */
   private scale = 1;
   private dpr = 1;
+  /** Play-area size and simulated time of the frame being drawn. */
+  private size: V2 = [1, 1];
+  private simTime = 0;
+  /** Placement area of emitters, which moving emitters keep to. */
+  private emitterTrack: Rect | undefined;
+  /** The level is drawn as water. */
+  private water = false;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -95,8 +94,13 @@ export class OverlayRenderer {
     ctx.setTransform(k, 0, 0, k, 0, 0);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    this.size = [s.level.grid.width, s.level.grid.height];
+    this.simTime = s.simTime;
+    this.emitterTrack = s.level.inventory.emitter?.area;
+    this.water = s.level.display?.palette === 'water';
     const light = !!s.level.medium.light;
 
+    this.drawAreas(s);
     s.level.goals.forEach((g, i) => this.drawGoal(g, s.goals[i], light));
     for (const item of s.level.fixed ?? []) this.drawArt(item, 1, s.time, 0);
 
@@ -220,7 +224,13 @@ export class OverlayRenderer {
         this.drawGlass(item);
         break;
       case 'emitter':
-        this.drawSpeaker(item.pos, item.freq, item.phase ?? 0, t);
+        if (item.vel && (item.vel[0] !== 0 || item.vel[1] !== 0)) {
+          const rect = motionRect(this.size, this.emitterTrack);
+          this.drawPath(item.pos, item.vel, rect, COLORS.piece);
+          this.drawSpeaker(motionAt(item.pos, item.vel, this.simTime, rect), item.freq, item.phase ?? 0, t);
+        } else {
+          this.drawSpeaker(item.pos, item.freq, item.phase ?? 0, t);
+        }
         break;
       case 'resonator':
         this.drawFork(item.pos, item.freq, amp, t);
@@ -279,7 +289,8 @@ export class OverlayRenderer {
   /** Glass: tinted body, light edge on the lit side, dark edge opposite, and a glint. */
   private drawGlass(item: Item & { kind: 'lens' | 'prism' | 'slab' }): void {
     const ctx = this.ctx;
-    const tint = item.material ? GLASS_TINT[item.material] : '170, 140, 255';
+    // Slow regions without a material: purple gel for sound, sand-colored shallows for water.
+    const tint = item.material ? GLASS_TINT[item.material] : this.water ? '214, 190, 130' : '170, 140, 255';
     const c = itemCenter(item);
     const r = item.kind === 'lens' ? Math.max(...item.radii) : Math.max(...item.size) / 2;
     const grad = ctx.createLinearGradient(c[0] - r, c[1] - r, c[0] + r, c[1] + r);
@@ -308,6 +319,61 @@ export class OverlayRenderer {
     glint.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = glint;
     ctx.fillRect(c[0] - r, c[1] - r, 2 * r, 2 * r);
+    ctx.restore();
+  }
+
+  /** Dashed outlines of the areas some pieces are limited to: always faint, brighter while
+   * that piece is being placed or edited. */
+  private drawAreas(s: OverlayState): void {
+    const ctx = this.ctx;
+    const active = s.ghost?.kind ?? (s.selected !== null ? s.items[s.selected]?.kind : undefined) ?? s.armed;
+    for (const [kind, entry] of Object.entries(s.level.inventory)) {
+      const a = entry?.area;
+      if (!a) continue;
+      const on = kind === active;
+      ctx.save();
+      ctx.setLineDash([4 * this.px, 4 * this.px]);
+      ctx.strokeStyle = COLORS.piece;
+      ctx.globalAlpha = on ? 0.75 : 0.28;
+      ctx.lineWidth = 1.2 * this.px;
+      ctx.strokeRect(a[0], a[1], a[2] - a[0], a[3] - a[1]);
+      if (on) {
+        ctx.globalAlpha = 0.07;
+        ctx.fillStyle = COLORS.piece;
+        ctx.fillRect(a[0], a[1], a[2] - a[0], a[3] - a[1]);
+      }
+      ctx.restore();
+    }
+  }
+
+  /** A dashed track from a moving source's start to where it stops, with an arrowhead. */
+  private drawPath(from: V2, vel: V2, rect: Rect, color: string): void {
+    const stop = motionStop(from, vel, rect);
+    if (!Number.isFinite(stop) || stop <= 0) return;
+    const ctx = this.ctx;
+    const to: V2 = [from[0] + vel[0] * stop, from[1] + vel[1] * stop];
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.45;
+    ctx.lineWidth = 1.2 * this.px;
+    ctx.setLineDash([3 * this.px, 4 * this.px]);
+    ctx.beginPath();
+    ctx.moveTo(...from);
+    ctx.lineTo(...to);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const a = Math.atan2(vel[1], vel[0]);
+    const head = 5;
+    ctx.beginPath();
+    ctx.moveTo(to[0] - head * Math.cos(a - 0.45), to[1] - head * Math.sin(a - 0.45));
+    ctx.lineTo(...to);
+    ctx.lineTo(to[0] - head * Math.cos(a + 0.45), to[1] - head * Math.sin(a + 0.45));
+    ctx.stroke();
+    // Start marker: where the piece is grabbed.
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(from[0], from[1], 3, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -387,7 +453,9 @@ export class OverlayRenderer {
       const freq = light ? 4 : (src.freq ?? 3);
       const phase = (t * freq) % 1;
       if (src.kind === 'point') {
-        const [x, y] = src.pos;
+        const rect = motionRect([level.grid.width, level.grid.height]);
+        if (src.vel) this.drawPath(src.pos, src.vel, rect, COLORS.source);
+        const [x, y] = motionAt(src.pos, src.vel, this.simTime, rect);
         for (const off of [0, 0.5]) {
           const p = (phase + off) % 1;
           ctx.globalAlpha = 0.5 * (1 - p);
@@ -527,7 +595,7 @@ export class OverlayRenderer {
           // Show which colors must stay out: small crossed dots.
           goal.colors.forEach((c, i) => {
             const cx = x + (i - (goal.colors!.length - 1) / 2) * 4;
-            ctx.fillStyle = LIGHT_COLORS[c];
+            ctx.fillStyle = lightHex(c);
             ctx.beginPath();
             ctx.arc(cx, y, 1.4, 0, Math.PI * 2);
             ctx.fill();

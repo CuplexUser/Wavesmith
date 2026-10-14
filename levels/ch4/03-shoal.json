@@ -1,0 +1,54 @@
+{
+  "chapter": 4,
+  "id": "4-3",
+  "name": "Shoal",
+  "description": "Water waves slow down where the water gets shallow. A round shoal works like a lens: ripples from the stone that cross it bend together again on the far side. Gather them on the buoy.",
+  "hint": "A lens forms an image of the stone. Too strong and the waves meet before the buoy; too weak and they meet past it.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.03
+  },
+  "display": {
+    "palette": "water",
+    "gain": 1.4
+  },
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        30,
+        80
+      ],
+      "freq": 2
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        226,
+        80
+      ],
+      "radius": 5,
+      "threshold": 0.85,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "lens": {
+      "count": 1,
+      "cost": 2,
+      "maxSize": 110
+    }
+  },
+  "budget": 2,
+  "par": {
+    "cost": 2,
+    "energy": 25
+  },
+  "timeLimit": 25
+}

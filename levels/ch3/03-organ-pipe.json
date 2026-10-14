@@ -1,0 +1,115 @@
+{
+  "chapter": 3,
+  "id": "3-3",
+  "name": "Organ Pipe",
+  "description": "A closed chamber has its own notes: only certain pitches fit between its walls a whole number of half-waves. Play one of them and the chamber rings loudly; miss it and the sound fizzles. Ring this chamber in the pattern shown.",
+  "hint": "Three loud spots and two still ones means three half-waves along the chamber. Start the emitter on a loud spot and sweep its frequency slowly until the meter jumps.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.12
+  },
+  "sources": [],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        58,
+        58
+      ],
+      "b": [
+        182,
+        58
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        58,
+        102
+      ],
+      "b": [
+        182,
+        102
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        58,
+        58
+      ],
+      "b": [
+        58,
+        102
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        182,
+        58
+      ],
+      "b": [
+        182,
+        102
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "sustain",
+      "antinodes": [
+        [
+          80,
+          80
+        ],
+        [
+          120,
+          80
+        ],
+        [
+          160,
+          80
+        ]
+      ],
+      "nodes": [
+        [
+          100,
+          80
+        ],
+        [
+          140,
+          80
+        ]
+      ],
+      "radius": 3,
+      "high": 12,
+      "low": 6,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "freq": 1.5,
+      "tune": [
+        "freq"
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 40
+  },
+  "timeLimit": 40
+}

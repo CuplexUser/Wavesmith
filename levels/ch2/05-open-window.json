@@ -1,0 +1,119 @@
+{
+  "chapter": 2,
+  "id": "2-5",
+  "name": "Open Window",
+  "description": "Traffic noise pours through a small open window into a bedroom. The window is narrower than a wavelength, so the sound spreads from it as if from a single point. Cancel it right there.",
+  "hint": "Sound leaving a small opening acts like one source. An emitter just inside the window, in antiphase, can silence the whole room.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "line",
+      "a": [
+        10,
+        12
+      ],
+      "b": [
+        246,
+        12
+      ],
+      "freq": 3
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        100,
+        60
+      ],
+      "b": [
+        170,
+        60
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        180,
+        60
+      ],
+      "b": [
+        250,
+        60
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        100,
+        60
+      ],
+      "b": [
+        100,
+        155
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        250,
+        60
+      ],
+      "b": [
+        250,
+        155
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        100,
+        155
+      ],
+      "b": [
+        250,
+        155
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "silence",
+      "pos": [
+        175,
+        120
+      ],
+      "radius": 12,
+      "threshold": 0.06,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "tune": [
+        "phase",
+        "amp"
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 185
+  },
+  "timeLimit": 25
+}

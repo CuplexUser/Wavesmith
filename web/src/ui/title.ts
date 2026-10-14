@@ -6,6 +6,7 @@ import { Sim } from '../sim/bridge';
 import { Stepper } from '../sim/stepper';
 import type { Level } from '../types';
 import { h } from './dom';
+import { openSettings } from './settings';
 import { ICONS } from './icons';
 
 /** Three sources with slightly different pitches, so the pattern slowly drifts. */
@@ -59,8 +60,10 @@ export function titleScreen(app: App): Screen {
         { class: 'title-actions' },
         h('button', { class: 'btn primary', onclick: () => app.go({ screen: 'select' }) }, total > 0 ? 'Continue' : 'Play'),
         soundBtn,
+        h('button', { class: 'icon-btn', 'aria-label': 'Settings', html: ICONS.gear, onclick: () => openSettings(app) }),
       ),
       total > 0 ? h('p', { class: 'title-progress' }, `${total} / ${max} stars`) : null,
+      h('button', { class: 'link-btn title-editor', onclick: () => app.go({ screen: 'editor' }) }, 'Level editor'),
     ),
   );
   app.root.append(root);
@@ -87,7 +90,8 @@ export function titleScreen(app: App): Screen {
     if (!renderer || !sim) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     renderer.resize(DEMO.grid.width * 3, DEMO.grid.height * 3, dpr);
-    sim.step(stepper.advance(now - last));
+    // Reduced motion: a still frame of the pattern.
+    if (!app.reducedMotion) sim.step(stepper.advance(now - last));
     last = now;
     renderer.uploadField(sim.field());
     renderer.draw(DEMO.grid.width, DEMO.grid.height, sim.border);

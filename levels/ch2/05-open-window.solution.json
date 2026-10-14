@@ -1,0 +1,4 @@
+{
+  "note": "Just inside the window, in antiphase with the little sound that squeezes through.",
+  "pieces": [{ "kind": "emitter", "pos": [175, 64], "freq": 3, "amp": 0.08, "phase": 0.65 }]
+}

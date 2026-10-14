@@ -67,6 +67,8 @@ export class Editor {
   private drag: Drag | null = null;
   private pointers = new Map<number, { cells: V2; client: V2 }>();
   private pressClient: V2 | null = null;
+  /** Last board point under a hovering pointer, where keyboard placement drops pieces. */
+  private lastHover: V2 | null = null;
   private lastBlockedToast = 0;
   private detach: (() => void) | null = null;
 
@@ -124,6 +126,11 @@ export class Editor {
     if (index !== null && index !== this.selected) this.host.sound('select', this.items[index]);
     this.selected = index;
     this.host.changed();
+  }
+
+  /** Changes the rules pieces are checked against (the level editor's draft changed). */
+  setLevel(level: Level): void {
+    this.host.level = level;
   }
 
   /** Replaces the whole layout without recording undo (used when loading a level). */
@@ -206,6 +213,51 @@ export class Editor {
     this.updateSelected(translate(this.items[this.selected]!, d));
   }
 
+  /**
+   * Keyboard placement: drops the armed piece at the middle of the board (or the last spot
+   * the pointer hovered), nudged to the nearest allowed place.
+   */
+  placeArmed(at?: V2): boolean {
+    const kind = this.armed;
+    if (!kind) return false;
+    if (remaining(this.host.level, this.items, kind) <= 0) {
+      this.host.toast('None left: remove a piece or pick another tool');
+      this.host.sound('invalid');
+      return true;
+    }
+    const { width, height } = this.host.level.grid;
+    const p = at ?? this.lastHover ?? [width / 2, height / 2];
+    const want = this.moveWithin(createItem(this.host.level, kind, p), [0, 0]);
+    // Search outward for a free spot when the first choice is blocked.
+    for (let r = 0; r <= Math.max(width, height); r += 6) {
+      for (let k = 0; k < Math.max(1, Math.round((2 * Math.PI * r) / 6)); k++) {
+        const a = (k / Math.max(1, Math.round((2 * Math.PI * r) / 6))) * 2 * Math.PI;
+        const item = this.moveWithin(want, [r * Math.cos(a), r * Math.sin(a)]);
+        if (this.isValid(item, null) && this.apply([...this.items, item])) {
+          this.selected = this.items.length - 1;
+          this.armed = null;
+          this.host.sound('place', item);
+          this.host.changed();
+          return true;
+        }
+      }
+    }
+    this.host.toast('No room for that piece');
+    this.host.sound('invalid');
+    return true;
+  }
+
+  /** Selects the next (or previous) placed piece, for keyboard play. */
+  cycleSelection(dir: 1 | -1): boolean {
+    const n = this.items.length;
+    if (n === 0) return false;
+    const i = this.selected === null ? (dir > 0 ? 0 : n - 1) : (this.selected + dir + n) % n;
+    this.armed = null;
+    this.select(i);
+    this.host.changed();
+    return true;
+  }
+
   /** Keyboard shortcuts for editing. Returns true when the key was used. */
   onKey(e: KeyboardEvent): boolean {
     const step = e.shiftKey ? Math.PI / 36 : Math.PI / 12;
@@ -216,6 +268,12 @@ export class Editor {
     }
     const sel = this.selected !== null;
     switch (e.key) {
+      case 'Enter':
+        return this.placeArmed();
+      case ']':
+        return this.cycleSelection(1);
+      case '[':
+        return this.cycleSelection(-1);
       case 'Delete':
       case 'Backspace':
         this.deleteSelected();
@@ -475,6 +533,7 @@ export class Editor {
 
   private onMove(e: PointerEvent): void {
     const cells = this.host.toCells(e.clientX, e.clientY);
+    this.lastHover = cells;
     const ptr = this.pointers.get(e.pointerId);
     if (!ptr) {
       // Hovering with a mouse: highlight what a click would grab.

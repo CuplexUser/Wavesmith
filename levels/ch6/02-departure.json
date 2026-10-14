@@ -1,0 +1,50 @@
+{
+  "chapter": 6,
+  "id": "6-2",
+  "name": "Departure",
+  "description": "A train's horn drops in pitch as it pulls away: the crests leave from farther and farther off, so they arrive stretched out. This crystal rings at 2.5 Hz, below the emitter's 3 Hz. Make it hear the lower note.",
+  "hint": "Moving away at speed v, a 3 Hz note arrives at 3\u00b760/(60 + v) Hz.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [],
+  "goals": [
+    {
+      "kind": "resonate",
+      "pos": [
+        20,
+        80
+      ],
+      "freq": 2.5,
+      "q": 30,
+      "threshold": 8
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "freq": 3,
+      "tune": [
+        "speed"
+      ],
+      "area": [
+        90,
+        20,
+        248,
+        140
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 25
+  },
+  "timeLimit": 25
+}

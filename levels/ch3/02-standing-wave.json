@@ -1,0 +1,67 @@
+{
+  "chapter": 3,
+  "id": "3-2",
+  "name": "Standing Wave",
+  "description": "A wave and its own reflection add into a standing wave: points that never move (nodes) and points that swing twice as hard (antinodes), half a wavelength apart. Make the bright marker swing and keep the two dim ones still.",
+  "hint": "A wall is always a node. The nodes repeat every half wavelength back from it, so slide the wall until the pattern lines up.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "line",
+      "a": [
+        10,
+        2
+      ],
+      "b": [
+        10,
+        158
+      ],
+      "freq": 1.5
+    }
+  ],
+  "goals": [
+    {
+      "kind": "sustain",
+      "antinodes": [
+        [
+          150,
+          80
+        ]
+      ],
+      "nodes": [
+        [
+          140,
+          80
+        ],
+        [
+          160,
+          80
+        ]
+      ],
+      "radius": 2,
+      "high": 1.4,
+      "low": 0.75,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "wall": {
+      "count": 1,
+      "cost": 1,
+      "maxSize": 140
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 22
+  },
+  "timeLimit": 30
+}

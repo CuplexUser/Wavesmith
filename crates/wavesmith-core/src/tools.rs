@@ -192,27 +192,36 @@ pub enum Medium {
     Material(Material),
 }
 
-fn default_thickness() -> f32 {
+pub(crate) fn default_thickness() -> f32 {
     3.0
 }
-fn default_strength() -> f32 {
+pub(crate) fn default_strength() -> f32 {
     40.0
 }
-fn default_q() -> f32 {
+pub(crate) fn default_q() -> f32 {
     25.0
 }
-fn default_amp() -> f32 {
+pub(crate) fn default_amp() -> f32 {
     1.0
 }
-fn default_ratio() -> f32 {
+pub(crate) fn default_ratio() -> f32 {
     1.0
 }
-fn default_material() -> Material {
+pub(crate) fn is_still(v: &V2) -> bool {
+    v[0] == 0.0 && v[1] == 0.0
+}
+
+/// Fastest a moving source may travel, in cells per second: well below the wave speed, so
+/// sources never outrun their own sound.
+pub const MAX_SOURCE_SPEED: f32 = 0.6 * crate::MAX_SPEED;
+
+pub(crate) fn default_material() -> Material {
     Material::Crown
 }
 
 /// A piece on the board, either fixed by the level or placed by the player.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+// Deserialized by hand in `crate::json`, which keeps the WebAssembly build small.
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Item {
     /// Straight hard wall.
@@ -277,7 +286,9 @@ pub enum Item {
         #[serde(default = "default_q")]
         q: f32,
     },
-    /// Point source with player-set frequency and phase.
+    /// Point source with player-set frequency, phase, and strength. With a velocity it travels
+    /// in a straight line from `pos` until it nears the edge of the board (see
+    /// [`crate::source::Motion`]), which shifts its pitch by the Doppler effect.
     Emitter {
         pos: V2,
         freq: f32,
@@ -285,6 +296,8 @@ pub enum Item {
         amp: f32,
         #[serde(default)]
         phase: f32,
+        #[serde(default, skip_serializing_if = "is_still")]
+        vel: V2,
     },
 }
 
@@ -505,12 +518,16 @@ impl Item {
                 freq,
                 amp,
                 phase,
+                vel,
             } => {
-                if !finite(&[pos[0], pos[1], freq, amp, phase]) {
+                if !finite(&[pos[0], pos[1], freq, amp, phase, vel[0], vel[1]]) {
                     return Err("emitter has a non-finite value".into());
                 }
                 if !(0.25..=10.0).contains(&freq) || !(0.0..=4.0).contains(&amp) {
                     return Err("emitter tuning is out of range".into());
+                }
+                if len(vel) > MAX_SOURCE_SPEED + 1e-3 {
+                    return Err("emitter moves too fast".into());
                 }
             }
         }
@@ -561,6 +578,7 @@ mod tests {
                 freq: 3.0,
                 amp: 1.0,
                 phase: 0.5,
+                vel: [0.0, 0.0],
             },
         ];
         let s = serde_json::to_string(&items).unwrap();

@@ -1,0 +1,4 @@
+{
+  "note": "Same pitch as the machine (2.5 Hz), on the line from machine to zone, phase and strength matched.",
+  "pieces": [{ "kind": "emitter", "pos": [120, 80], "freq": 2.5, "amp": 0.8, "phase": 2.48 }]
+}

@@ -107,7 +107,7 @@ pub fn load_levels(dir: &std::path::Path) -> Result<Vec<LevelFile>, String> {
         let solution = if sol_path.exists() {
             let text = std::fs::read_to_string(&sol_path).map_err(|e| e.to_string())?;
             let sol: SolutionFile =
-                serde_json::from_str(&text).map_err(|e| format!("{}: {e}", sol_path.display()))?;
+                crate::json::parse(&text).map_err(|e| format!("{}: {e}", sol_path.display()))?;
             Some(sol.pieces)
         } else {
             None

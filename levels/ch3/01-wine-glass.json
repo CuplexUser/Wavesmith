@@ -1,0 +1,53 @@
+{
+  "chapter": 3,
+  "id": "3-1",
+  "name": "Wine Glass",
+  "description": "A crystal glass rings at its own pitch, 2.4 Hz. Sound at any other pitch barely moves it, but push it in time with its ring and the swings build until it shatters.",
+  "hint": "The speaker is at 3 Hz, the wrong pitch. Tune the emitter to the glass and put it close.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        40,
+        80
+      ],
+      "freq": 3
+    }
+  ],
+  "goals": [
+    {
+      "kind": "resonate",
+      "pos": [
+        200,
+        80
+      ],
+      "freq": 2.4,
+      "q": 30,
+      "threshold": 12
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "freq": 3,
+      "tune": [
+        "freq"
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 28
+  },
+  "timeLimit": 25
+}

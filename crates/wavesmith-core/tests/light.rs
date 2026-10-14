@@ -118,3 +118,19 @@ fn light_runs_are_deterministic() {
             .all(|(x, y)| x.to_bits() == y.to_bits()));
     }
 }
+
+#[test]
+fn wavefront_phases_round_trip_through_packing() {
+    use wavesmith_core::session::unpack_wavefronts;
+    let mut s = Session::new(light_level(125.0)).unwrap();
+    s.step(120 * 3);
+    let nx = s.nx();
+    let img = s.light_image().to_vec();
+    let i = (125 + SPONGE) * nx + 90 + SPONGE;
+    let w = unpack_wavefronts(img[i * 4 + 3]);
+    assert!(w.iter().all(|v| (0.0..=1.0).contains(v)));
+    assert_eq!(
+        unpack_wavefronts(31.0 * 1024.0 + 0.0 * 32.0 + 31.0),
+        [1.0, 0.0, 1.0]
+    );
+}

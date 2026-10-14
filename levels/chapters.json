@@ -18,21 +18,37 @@
       "id": 2,
       "name": "Interference",
       "free": true,
-      "levels": [],
+      "levels": [
+        "01-anti-noise",
+        "02-two-voices",
+        "03-tuning-fork",
+        "04-quiet-duct",
+        "05-open-window"
+      ],
       "dir": "ch2"
     },
     {
       "id": 3,
       "name": "Resonance",
       "free": false,
-      "levels": [],
+      "levels": [
+        "01-wine-glass",
+        "02-standing-wave",
+        "03-organ-pipe",
+        "04-two-crystals"
+      ],
       "dir": "ch3"
     },
     {
       "id": 4,
       "name": "Refraction",
       "free": false,
-      "levels": [],
+      "levels": [
+        "01-sound-lens",
+        "02-whale-song",
+        "03-shoal",
+        "04-fog-horn"
+      ],
       "dir": "ch4"
     },
     {
@@ -44,7 +60,8 @@
         "02-burning-glass",
         "03-prism",
         "04-light-pipe",
-        "05-red-only"
+        "05-red-only",
+        "06-spectrum"
       ],
       "dir": "ch5"
     },
@@ -52,7 +69,11 @@
       "id": 6,
       "name": "Doppler",
       "free": false,
-      "levels": [],
+      "levels": [
+        "01-siren",
+        "02-departure",
+        "03-two-tone"
+      ],
       "dir": "ch6"
     }
   ]

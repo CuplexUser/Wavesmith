@@ -1,0 +1,4 @@
+{
+  "note": "Emitter tuned to the glass's 2.4 Hz, close to it.",
+  "pieces": [{ "kind": "emitter", "pos": [160, 80], "freq": 2.4 }]
+}

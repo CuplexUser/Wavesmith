@@ -1,0 +1,4 @@
+{
+  "note": "Mirror image of the speaker across the zone's line, in antiphase: equal paths cancel on that line; the target sits half a wavelength off it.",
+  "pieces": [{ "kind": "emitter", "pos": [40, 96], "freq": 3, "phase": 3.1416 }]
+}

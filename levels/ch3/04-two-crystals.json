@@ -1,0 +1,77 @@
+{
+  "chapter": 3,
+  "id": "3-4",
+  "name": "Two Crystals",
+  "description": "Two crystals, two pitches. A low one rings at 1.8 Hz and a high one at 3.6 Hz; the speaker plays neither. Shatter both.",
+  "hint": "Each emitter can only push the crystal that shares its pitch. Give each crystal its own emitter, tuned and close.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        128,
+        20
+      ],
+      "freq": 2.6
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        128,
+        60
+      ],
+      "b": [
+        128,
+        160
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "resonate",
+      "pos": [
+        60,
+        120
+      ],
+      "freq": 1.8,
+      "q": 30,
+      "threshold": 12
+    },
+    {
+      "kind": "resonate",
+      "pos": [
+        196,
+        120
+      ],
+      "freq": 3.6,
+      "q": 30,
+      "threshold": 12
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 2,
+      "cost": 1,
+      "freq": 2.6,
+      "tune": [
+        "freq"
+      ]
+    }
+  },
+  "budget": 2,
+  "par": {
+    "cost": 2,
+    "energy": 35
+  },
+  "timeLimit": 30
+}

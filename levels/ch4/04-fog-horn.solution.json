@@ -1,0 +1,4 @@
+{
+  "note": "Flint wedge just past the horn, base turned up and tilted a little, bending the beam over the wall.",
+  "pieces": [{ "kind": "prism", "pos": [62, 126], "size": [84, 90], "angle": 2.88, "material": "flint" }]
+}

@@ -1,0 +1,4 @@
+{
+  "note": "About 9 cells/s toward the high crystal: ≈3.5 Hz ahead and ≈2.6 Hz behind.",
+  "pieces": [{ "kind": "emitter", "pos": [80, 80], "freq": 3, "vel": [9, 0] }]
+}

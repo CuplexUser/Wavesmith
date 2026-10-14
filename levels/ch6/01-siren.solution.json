@@ -1,0 +1,4 @@
+{
+  "note": "Toward the crystal at 8.5 cells/s: 3 Hz arrives as 3·60/51.5 ≈ 3.5 Hz.",
+  "pieces": [{ "kind": "emitter", "pos": [30, 80], "freq": 3, "vel": [8.5, 0] }]
+}

@@ -1,0 +1,4 @@
+{
+  "note": "Emitter on the line from machine to zone, phase flipped, strength trimmed to the shorter distance.",
+  "pieces": [{ "kind": "emitter", "pos": [110, 80], "freq": 3, "amp": 0.65, "phase": 3.1 }]
+}

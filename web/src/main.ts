@@ -3,6 +3,7 @@ import './styles.css';
 import { App } from './app';
 import { loadCatalog } from './levels';
 import { loadCore } from './sim/bridge';
+import { levelEditorScreen } from './ui/levelEditor';
 import { levelSelectScreen } from './ui/levelSelect';
 import { playScreen } from './ui/play';
 import { titleScreen } from './ui/title';
@@ -14,7 +15,10 @@ async function boot(): Promise<void> {
     const app = new App(root, catalog);
     app.register('title', (a) => titleScreen(a));
     app.register('select', (a) => levelSelectScreen(a));
-    app.register('play', (a, r) => playScreen(a, r.screen === 'play' ? r.levelId : ''));
+    app.register('play', (a, r) =>
+      r.screen === 'play' ? playScreen(a, r.levelId, r.layout, r.custom) : playScreen(a, ''),
+    );
+    app.register('editor', (a) => levelEditorScreen(a));
     app.go(app.routeFromHash());
     // Browser back/forward and edited URLs.
     window.addEventListener('hashchange', () => app.go(app.routeFromHash()));

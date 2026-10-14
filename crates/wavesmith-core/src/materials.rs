@@ -11,8 +11,8 @@
 //! - A: like R, for the player's walls and reflectors, so they can be drawn differently.
 
 use crate::level::Level;
-use crate::light::SOUND_CHANNEL;
-use crate::solver::Materials;
+use crate::light::{Color, SOUND_CHANNEL};
+use crate::solver::{dispersion_corrected_c2, Laplacian, Materials};
 use crate::tools::{ellipse_rho, Item, Medium, V2};
 use crate::SPONGE;
 
@@ -23,6 +23,15 @@ pub const OVERLAY_SDF_RANGE: f32 = 4.0;
 
 /// Target reflection of the sponge layer for a wave hitting it head-on.
 const SPONGE_REFLECTION: f32 = 1e-4;
+
+/// Half-width, in cells, of the blend between glass and air in light levels. Measured against
+/// the Fresnel equations (`examples/fresnel_check.rs`): a sharp step reflects up to 30% too
+/// much on this grid and the 1-cell blend sound levels use about 40% too little; 0.6 stays
+/// within about 15% at every angle and face orientation.
+const GLASS_EDGE: f32 = 0.6;
+/// Half-width of the blend for slow media in sound levels, where wavelengths are long and a
+/// softer edge mostly just hides the cell grid.
+const SOFT_EDGE: f32 = 1.0;
 
 /// Solver grid dimensions for a level: the play area plus the sponge on every side.
 pub fn grid_dims(level: &Level) -> (usize, usize) {
@@ -65,6 +74,8 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
     let mut absorb = vec![0.0f32; nx * ny];
     let channels = level.channels();
     let mut c2 = vec![vec![c0 * c0; nx * ny]; channels];
+    let light = channels == 3;
+    let edge = if light { GLASS_EDGE } else { SOFT_EDGE };
     // Distance fields for fixed and player walls, drawn separately.
     let mut wall_sdf = [
         vec![OVERLAY_SDF_RANGE; nx * ny],
@@ -116,10 +127,10 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
                     Item::Lens {
                         pos, radii, angle, ..
                     } => {
-                        let edge = 1.5 / radii[0].min(radii[1]);
-                        smoothstep(1.0 + edge, 1.0 - edge, ellipse_rho(p, pos, radii, angle))
+                        let e = 1.5 * edge / radii[0].min(radii[1]);
+                        smoothstep(1.0 + e, 1.0 - e, ellipse_rho(p, pos, radii, angle))
                     }
-                    _ => smoothstep(1.0, -1.0, item.distance(p)),
+                    _ => smoothstep(edge, -edge, item.distance(p)),
                 };
                 for_cells(nx, ny, lo, hi, |i, p| {
                     let cover = cover_at(p);
@@ -165,6 +176,17 @@ pub fn rasterize(level: &Level, placed: &[Item]) -> Rasterized {
     for y in 0..ny {
         m.wall[y * nx] = 1;
         m.wall[y * nx + nx - 1] = 1;
+    }
+    if light {
+        // Correct every cell's speed for the grid's dispersion at that color's frequency, so
+        // wavelengths, refraction angles, and critical angles match the refractive indices.
+        m.laplacian = Laplacian::Isotropic;
+        for (ch, c2) in c2.iter_mut().enumerate() {
+            let omega = std::f32::consts::TAU * Color::ALL[ch].freq(c0);
+            for v in c2.iter_mut() {
+                *v = dispersion_corrected_c2(v.sqrt(), omega);
+            }
+        }
     }
     let materials = c2
         .into_iter()

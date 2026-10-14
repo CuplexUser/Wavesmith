@@ -1,0 +1,4 @@
+{
+  "note": "Any point in the duct works; here halfway down, matched to the fan's single duct mode.",
+  "pieces": [{ "kind": "emitter", "pos": [80, 80], "freq": 3, "amp": 0.36, "phase": 5.53 }]
+}

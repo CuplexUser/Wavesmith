@@ -175,10 +175,16 @@ impl Session {
                     freq,
                     amp,
                     phase,
+                    vel,
                 } => {
-                    self.channels[0]
-                        .sources
-                        .push(Stencil::emitter(pos, freq, amp, phase, c, nx, ny));
+                    let area = self
+                        .level
+                        .inventory
+                        .get(&crate::tools::ToolKind::Emitter)
+                        .and_then(|e| e.area);
+                    self.channels[0].sources.push(
+                        Stencil::emitter(pos, vel, freq, amp, phase, c, nx, ny).confine(area),
+                    );
                 }
                 Item::Resonator { pos, freq, q } => {
                     let cells = Stencil::point_cells(pos, nx, ny);
@@ -349,31 +355,63 @@ impl Session {
     }
 
     /// Recomputes and returns the light image: four floats per cell holding the squared
-    /// amplitude envelope of red, green, and blue, then the green channel's instantaneous phase
-    /// as `cos²` (0..1), which the renderer uses to show moving wavefronts. For a monochromatic
-    /// field `u = A·cos(ωt + φ)`, the two most recent time levels give `A²` exactly.
+    /// amplitude envelope of red, green, and blue, then each channel's instantaneous phase as
+    /// `cos²` (0..1), which the renderer uses to show moving wavefronts in each color's own
+    /// beam. The phases are packed as 5-bit integers, `32²·red + 32·green + blue`, which a
+    /// float holds exactly (see [`unpack_wavefronts`]). For a monochromatic field
+    /// `u = A·cos(ωt + φ)`, the two most recent time levels give `A²` exactly.
     pub fn light_image(&mut self) -> &[f32] {
         let n = self.nx() * self.ny();
         self.light.resize(n * 4, 0.0);
+        for i in 0..n {
+            self.light[i * 4 + 3] = 0.0;
+        }
         for (k, ch) in self.channels.iter().enumerate().take(3) {
             let half = 0.5 * ch.omega * DT;
             let (cs, sn) = (libm::cosf(half), libm::sinf(half));
             let (u, p) = (ch.solver.field(), ch.solver.prev_field());
+            let weight = [1024.0, 32.0, 1.0][k];
             for i in 0..n {
                 let a = (u[i] + p[i]) / (2.0 * cs);
                 let b = (u[i] - p[i]) / (2.0 * sn);
                 let a2 = a * a + b * b;
                 self.light[i * 4 + k] = a2;
-                if k == 1 {
-                    self.light[i * 4 + 3] = if a2 > 1e-12 { a * a / a2 } else { 0.0 };
-                }
+                let phase = if a2 > 1e-12 { a * a / a2 } else { 0.0 };
+                self.light[i * 4 + 3] += weight * (phase * 31.0).round();
             }
         }
         &self.light
+    }
+
+    /// The solver of one channel.
+    pub fn channel_solver(&self, channel: usize) -> &Solver {
+        &self.channels[channel].solver
+    }
+
+    /// The rasterized sources driving one channel (level sources, then player emitters).
+    pub fn channel_sources(&self, channel: usize) -> &[Stencil] {
+        &self.channels[channel].sources
+    }
+
+    /// Whether anything on the board needs per-step work beyond fixed stencils (moving sources
+    /// or resonators), which only the CPU path supports.
+    pub fn has_dynamic_actors(&self) -> bool {
+        !self.resonators.is_empty()
+            || self
+                .channels
+                .iter()
+                .any(|c| c.sources.iter().any(|s| s.motion.is_some()))
     }
 
     /// Amplitude envelope of each player resonator.
     pub fn resonator_amplitudes(&self) -> Vec<f32> {
         self.resonators.iter().map(Oscillator::amplitude).collect()
     }
+}
+
+/// Unpacks the per-channel wavefront phases stored in the fourth value of
+/// [`Session::light_image`], each as `cos²` in 0..=1.
+pub fn unpack_wavefronts(packed: f32) -> [f32; 3] {
+    let v = packed.max(0.0) as u32;
+    [(v >> 10) & 31, (v >> 5) & 31, v & 31].map(|x| x as f32 / 31.0)
 }

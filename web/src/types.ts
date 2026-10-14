@@ -20,7 +20,8 @@ export type Item =
   | { kind: 'prism'; pos: V2; size: V2; angle?: number; material?: Material }
   | { kind: 'slab'; pos: V2; size: V2; angle?: number; material?: Material }
   | { kind: 'resonator'; pos: V2; freq: number; q?: number }
-  | { kind: 'emitter'; pos: V2; freq: number; amp?: number; phase?: number };
+  /** `vel` (cells/s) makes the emitter travel from `pos`; see `motionAt` in geometry.ts. */
+  | { kind: 'emitter'; pos: V2; freq: number; amp?: number; phase?: number; vel?: V2 };
 
 interface SourceCommon {
   /** Hz; light levels use each color's own frequency instead. */
@@ -33,7 +34,7 @@ interface SourceCommon {
 }
 
 export type SourceDef =
-  | ({ kind: 'point'; pos: V2 } & SourceCommon)
+  | ({ kind: 'point'; pos: V2; vel?: V2 } & SourceCommon)
   | ({ kind: 'line'; a: V2; b: V2 } & SourceCommon)
   | ({ kind: 'beam'; pos: V2; angle: number; width?: number } & SourceCommon);
 
@@ -59,12 +60,22 @@ export type Goal =
       hold: number;
     };
 
+/** A setting the player may change on emitters and resonators. */
+export type Tune = 'freq' | 'phase' | 'amp' | 'speed';
+
 export interface InventoryEntry {
   count: number;
   cost: number;
   maxSize?: number;
   /** Material for new glass pieces. */
   material?: Material;
+  /** Starting frequency of new emitters and resonators (default: the first source's). */
+  freq?: number;
+  /** Settings the player may change; others stay at their starting values. Defaults:
+   * emitters tune frequency and phase, resonators frequency. */
+  tune?: Tune[];
+  /** Rectangle `[x0, y0, x1, y1]` the piece's handles must stay inside. */
+  area?: [number, number, number, number];
 }
 
 export interface Level {
@@ -82,6 +93,8 @@ export interface Level {
   budget: number;
   par: { cost: number; energy: number };
   timeLimit: number;
+  /** Purely visual: field brightness and color scheme. */
+  display?: { gain?: number; palette?: 'sound' | 'water' };
 }
 
 export interface GoalStatus {

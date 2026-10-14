@@ -11,6 +11,8 @@
 // anti-aliased and follow the true geometry. Fixed walls look like stone; the player's walls
 // and reflectors look like polished metal.
 
+import { paletteMix } from './palette';
+
 const VERT = `#version 300 es
 in vec2 aPos;
 out vec2 vUv;
@@ -30,6 +32,10 @@ uniform float uPad;
 uniform float uGain;
 uniform float uPx;
 uniform int uMode;
+uniform vec3 uColR;
+uniform vec3 uColG;
+uniform vec3 uColB;
+uniform float uWaves;
 in vec2 vUv;
 out vec4 outColor;
 
@@ -43,6 +49,20 @@ vec4 sampleField(vec2 g) {
   vec2 t = fract(g);
   return mix(mix(tex(i0), tex(i0 + ivec2(1, 0)), t.x),
              mix(tex(i0 + ivec2(0, 1)), tex(i0 + ivec2(1, 1)), t.x), t.y);
+}
+
+// Light mode packs each color's wavefront phase into the fourth value as 5-bit integers
+// (32²·red + 32·green + blue; see Session::light_image), so unpack before filtering.
+vec3 wavefronts(vec4 v) {
+  float p = max(v.a, 0.0);
+  return vec3(floor(p / 1024.0), mod(floor(p / 32.0), 32.0), mod(p, 32.0)) / 31.0;
+}
+
+vec3 sampleWavefronts(vec2 g) {
+  ivec2 i0 = ivec2(floor(g));
+  vec2 t = fract(g);
+  return mix(mix(wavefronts(tex(i0)), wavefronts(tex(i0 + ivec2(1, 0))), t.x),
+             mix(wavefronts(tex(i0 + ivec2(0, 1))), wavefronts(tex(i0 + ivec2(1, 1))), t.x), t.y);
 }
 
 vec4 mat(vec2 g) { return texture(uMat, (g + 0.5) / uGrid); }
@@ -69,12 +89,22 @@ vec3 soundColor(float u) {
   return mix(col, vec3(1.0, 0.97, 0.9), smoothstep(0.82, 1.0, s) * 0.6);
 }
 
-vec3 lightColor(vec4 v) {
-  // Additive mixing of the three channels; the fourth value is the green wave's phase, which
-  // adds faint moving wavefronts inside the beams.
-  vec3 i = max(v.rgb, 0.0) * uGain;
-  vec3 c = i.r * vec3(1.0, 0.13, 0.08) + i.g * vec3(0.10, 1.0, 0.24) + i.b * vec3(0.14, 0.30, 1.0);
-  c *= 0.82 + 0.3 * v.a;
+vec3 waterColor(float u) {
+  // Water seen from above: deep blue, crests catching pale light, troughs darker.
+  float x = u * uGain;
+  float s = x / (1.0 + abs(x));
+  vec3 deep = vec3(0.02, 0.10, 0.20);
+  vec3 col = deep + vec3(0.05, 0.16, 0.22) * (0.5 + 0.5 * s);
+  col += vec3(0.75, 0.92, 1.0) * pow(max(s, 0.0), 2.2) * 0.85;
+  col *= 1.0 - 0.35 * max(-s, 0.0);
+  return col;
+}
+
+vec3 lightColor(vec3 v, vec3 phase) {
+  // Additive mixing of the three channels, each with faint moving wavefronts from its own
+  // phase, so beams a prism has split keep their own wave spacing and direction.
+  vec3 i = max(v, 0.0) * uGain * mix(vec3(0.97), 0.82 + 0.3 * phase, uWaves);
+  vec3 c = i.r * uColR + i.g * uColG + i.b * uColB;
   vec3 bg = vec3(0.010, 0.013, 0.028);
   return bg + (1.0 - exp(-c * 1.5));
 }
@@ -82,20 +112,21 @@ vec3 lightColor(vec4 v) {
 void main() {
   vec2 g = vec2(uPad) + vUv * uPlay - 0.5;
   vec4 v = sampleField(g);
-  vec3 col = uMode == 1 ? lightColor(v) : soundColor(v.r);
+  vec3 col = uMode == 1 ? lightColor(v.rgb, sampleWavefronts(g)) : uMode == 2 ? waterColor(v.r) : soundColor(v.r);
 
   // Faint cell grid for a sense of scale.
   vec2 cell = vUv * uPlay;
   vec2 gd = (0.5 - abs(fract(cell / 16.0) - 0.5)) * 16.0;
   float line = 1.0 - smoothstep(0.0, uPx * 1.2, min(gd.x, gd.y));
-  col += vec3(0.05, 0.08, 0.14) * line * (uMode == 1 ? 0.2 : 0.35);
+  col += vec3(0.05, 0.08, 0.14) * line * (uMode == 0 ? 0.35 : 0.2);
 
   vec4 m = mat(g);
   // One device pixel, in cells: the width of every anti-aliased edge.
   float aa = uPx;
 
   // Slow media: a faint tint (the canvas layer draws the glass itself).
-  vec3 tint = uMode == 1 ? vec3(0.55, 0.7, 0.95) : vec3(0.62, 0.42, 1.0);
+  // Water: slow regions are shallows, tinted like sand.
+  vec3 tint = uMode == 1 ? vec3(0.55, 0.7, 0.95) : uMode == 2 ? vec3(0.78, 0.7, 0.48) : vec3(0.62, 0.42, 1.0);
   col = mix(col, tint, m.b * (uMode == 1 ? 0.10 : 0.30));
 
   // Absorbers swallow waves; the canvas layer draws foam over them.
@@ -151,7 +182,7 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
   return sh;
 }
 
-export type RenderMode = 'sound' | 'light';
+export type RenderMode = 'sound' | 'light' | 'water';
 
 export class FieldRenderer {
   readonly gl: WebGL2RenderingContext;
@@ -164,6 +195,8 @@ export class FieldRenderer {
   private mode: RenderMode = 'sound';
   /** Value multiplier before tone mapping. */
   gain = 1.6;
+  /** Strength of the moving wavefronts drawn inside light beams (0 for reduced motion). */
+  waves = 1;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
@@ -178,7 +211,20 @@ export class FieldRenderer {
       throw new Error(`program: ${gl.getProgramInfoLog(prog) ?? 'link failed'}`);
     }
     this.prog = prog;
-    for (const name of ['uField', 'uMat', 'uGrid', 'uPlay', 'uPad', 'uGain', 'uPx', 'uMode']) {
+    for (const name of [
+      'uField',
+      'uMat',
+      'uGrid',
+      'uPlay',
+      'uPad',
+      'uGain',
+      'uPx',
+      'uMode',
+      'uColR',
+      'uColG',
+      'uColB',
+      'uWaves',
+    ]) {
       this.uniforms[name] = gl.getUniformLocation(prog, name);
     }
     const buf = gl.createBuffer();
@@ -257,7 +303,12 @@ export class FieldRenderer {
     gl.uniform2f(this.uniforms.uPlay!, playW, playH);
     gl.uniform1f(this.uniforms.uPad!, pad);
     gl.uniform1f(this.uniforms.uGain!, this.gain);
-    gl.uniform1i(this.uniforms.uMode!, this.mode === 'light' ? 1 : 0);
+    gl.uniform1i(this.uniforms.uMode!, this.mode === 'light' ? 1 : this.mode === 'water' ? 2 : 0);
+    const mix = paletteMix();
+    gl.uniform3f(this.uniforms.uColR!, ...mix.red);
+    gl.uniform3f(this.uniforms.uColG!, ...mix.green);
+    gl.uniform3f(this.uniforms.uColB!, ...mix.blue);
+    gl.uniform1f(this.uniforms.uWaves!, this.waves);
     // Anti-aliasing width, in cells per device pixel.
     gl.uniform1f(this.uniforms.uPx!, playW / this.canvas.width);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

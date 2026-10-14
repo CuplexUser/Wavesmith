@@ -1,0 +1,107 @@
+{
+  "chapter": 2,
+  "id": "2-4",
+  "name": "Quiet Duct",
+  "description": "A fan roars down a narrow duct into a quiet room. In a duct this thin, sound can only travel as one flat wave, so a single emitter in the duct can cancel everything downstream of it.",
+  "hint": "Place the emitter inside the duct. Its phase decides whether it cancels or doubles the fan; its strength must match the fan's.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "line",
+      "a": [
+        10,
+        74
+      ],
+      "b": [
+        10,
+        86
+      ],
+      "freq": 3
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        0,
+        70.5
+      ],
+      "b": [
+        150,
+        70.5
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        0,
+        89.5
+      ],
+      "b": [
+        150,
+        89.5
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        150,
+        0
+      ],
+      "b": [
+        150,
+        68.5
+      ],
+      "thickness": 4
+    },
+    {
+      "kind": "wall",
+      "a": [
+        150,
+        91.5
+      ],
+      "b": [
+        150,
+        160
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "silence",
+      "pos": [
+        210,
+        80
+      ],
+      "radius": 14,
+      "threshold": 0.05,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "tune": [
+        "phase",
+        "amp"
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 7
+  },
+  "timeLimit": 25
+}

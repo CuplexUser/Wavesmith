@@ -1,0 +1,60 @@
+{
+  "chapter": 6,
+  "id": "6-3",
+  "name": "Two-Tone",
+  "description": "One moving emitter sounds higher ahead of it and lower behind it, at the same time. Two crystals, one at 3.5 Hz and one at 2.6 Hz, wait at either end of the track. Break both with a single run.",
+  "hint": "Ahead the note rises to 3\u00b760/(60 \u2212 v); behind it falls to 3\u00b760/(60 + v). One speed suits both crystals.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [],
+  "goals": [
+    {
+      "kind": "resonate",
+      "pos": [
+        236,
+        80
+      ],
+      "freq": 3.5,
+      "q": 30,
+      "threshold": 7.5
+    },
+    {
+      "kind": "resonate",
+      "pos": [
+        20,
+        80
+      ],
+      "freq": 2.6,
+      "q": 30,
+      "threshold": 7.5
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "freq": 3,
+      "tune": [
+        "speed"
+      ],
+      "area": [
+        70,
+        20,
+        190,
+        140
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 25
+  },
+  "timeLimit": 25
+}

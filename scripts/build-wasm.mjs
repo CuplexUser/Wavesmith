@@ -28,10 +28,13 @@ const wasm = path.join(root, 'target', 'wasm32-unknown-unknown', profile, 'waves
 const out = path.join(root, 'web', 'src', 'wasm');
 run('wasm-bindgen', ['--target', 'web', '--out-dir', out, '--out-name', 'wavesmith', wasm]);
 
-// wasm-opt is optional; skip quietly when Binaryen isn't installed.
+// wasm-opt comes from the `binaryen` dev dependency (pnpm puts it on PATH for scripts), so CI
+// and local builds optimize the same way. Run directly with node, it is used if found.
 if (release) {
   const probe = spawnSync('wasm-opt', ['--version']);
-  if (probe.status === 0) {
+  if (probe.status !== 0) {
+    console.warn('wasm-opt not found; the WebAssembly will be about 50% larger. Run via `pnpm wasm`.');
+  } else {
     const file = path.join(out, 'wavesmith_bg.wasm');
     run('wasm-opt', ['-O3', '--enable-simd', '--enable-bulk-memory', '--enable-nontrapping-float-to-int', '-o', file, file]);
   }

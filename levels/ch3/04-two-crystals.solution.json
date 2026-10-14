@@ -1,0 +1,7 @@
+{
+  "note": "One emitter per crystal, each tuned to its crystal and placed close to it.",
+  "pieces": [
+    { "kind": "emitter", "pos": [60, 90], "freq": 1.8 },
+    { "kind": "emitter", "pos": [196, 90], "freq": 3.6 }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "chapter": 6,
+  "id": "6-1",
+  "name": "Siren",
+  "description": "A siren sounds higher as it rushes toward you: each crest leaves from a little closer, so they arrive bunched up. This emitter plays 3 Hz, but the crystal only answers to 3.5 Hz. Send the emitter toward it at just the right speed.",
+  "hint": "Coming toward you at speed v, a 3 Hz note arrives at 3\u00b760/(60 \u2212 v) Hz. Waves here travel 60 cells a second.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [],
+  "goals": [
+    {
+      "kind": "resonate",
+      "pos": [
+        236,
+        80
+      ],
+      "freq": 3.5,
+      "q": 30,
+      "threshold": 8
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "freq": 3,
+      "tune": [
+        "speed"
+      ],
+      "area": [
+        8,
+        20,
+        190,
+        140
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 34
+  },
+  "timeLimit": 30
+}
