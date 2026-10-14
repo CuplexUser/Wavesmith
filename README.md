@@ -43,7 +43,7 @@ cargo run --release -p wavesmith-core --example verify_levels   # level tuning r
 cd web
 pnpm install
 pnpm wasm        # build the core to web/src/wasm
-pnpm dev         # http://localhost:5173
+pnpm dev         # http://localhost:5173 (rebuilds the core first if the Rust sources changed)
 pnpm test        # Vitest
 pnpm build       # type check + production build into web/dist (base /wavesmith/)
 pnpm preview     # serve the production build

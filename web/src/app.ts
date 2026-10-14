@@ -141,7 +141,14 @@ export class App {
     this.audio.leaveLevel();
     const factory = this.factories.get(route.screen);
     if (!factory) throw new Error(`no screen ${route.screen}`);
-    this.current = factory(this, route);
+    try {
+      this.current = factory(this, route);
+    } catch (e) {
+      // A level the core rejects (or any screen that fails to build) shows the reason
+      // instead of leaving a blank page.
+      console.error(e);
+      this.current = this.errorScreen(e);
+    }
     const hash =
       route.screen === 'play'
         ? route.custom
@@ -153,6 +160,26 @@ export class App {
             ? '#/editor'
             : '#/';
     if (location.hash !== hash) history.replaceState(null, '', hash);
+  }
+
+  private errorScreen(e: unknown): Screen {
+    const msg = e instanceof Error ? e.message : String(e);
+    this.root.replaceChildren();
+    const box = document.createElement('div');
+    box.className = 'fatal';
+    const title = document.createElement('h1');
+    title.textContent = 'This screen couldn’t open';
+    const detail = document.createElement('pre');
+    detail.textContent = msg;
+    const hint = document.createElement('p');
+    hint.textContent = 'If you are running from source, rebuild the core with `pnpm wasm`.';
+    const back = document.createElement('button');
+    back.className = 'btn';
+    back.textContent = 'Back to levels';
+    back.addEventListener('click', () => this.go({ screen: 'select' }));
+    box.append(title, detail, hint, back);
+    this.root.append(box);
+    return { destroy() {} };
   }
 
   /** Reads the route from the URL hash, so reloads keep the player's place. */
