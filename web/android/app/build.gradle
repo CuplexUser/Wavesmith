@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.cuplex.wavesmith"
+    namespace = "se.cuplex.wavesmith"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.cuplex.wavesmith"
+        applicationId "se.cuplex.wavesmith"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI passes the run number so every upload to Play gets a higher code.

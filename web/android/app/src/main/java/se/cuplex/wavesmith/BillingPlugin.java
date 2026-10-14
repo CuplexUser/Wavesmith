@@ -1,4 +1,4 @@
-package com.cuplex.wavesmith;
+package se.cuplex.wavesmith;
 
 import com.android.billingclient.api.AcknowledgePurchaseParams;
 import com.android.billingclient.api.BillingClient;

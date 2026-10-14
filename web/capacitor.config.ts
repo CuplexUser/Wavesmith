@@ -3,10 +3,9 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // The Android app wraps the Vite build. Assets ship inside the APK (no CDN, no fonts to
 // fetch), so the game runs offline.
 //
-// appId is the Play Store package name and can never change after the first upload: replace
-// it before publishing if you want a different one.
+// appId is the Play Store package name; it can never change after the first upload.
 const config: CapacitorConfig = {
-  appId: 'com.cuplex.wavesmith',
+  appId: 'se.cuplex.wavesmith',
   appName: 'Wavesmith',
   webDir: 'dist',
   backgroundColor: '#070b14',

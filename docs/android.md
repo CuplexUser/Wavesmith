@@ -22,12 +22,11 @@ native code is known to compile.
 | Signed AAB in GitHub Actions, internal track upload | `.github/workflows/android.yml` | Needs secrets |
 | Web demo linking to the store | Level select banner, `PLAY_STORE_URL` in `store.ts` | Update the URL when live |
 
-## 1. Decide the package name (do this first)
+## 1. Package name
 
-`com.cuplex.wavesmith` is set in `web/capacitor.config.ts`, `web/android/app/build.gradle`
+The app is `se.cuplex.wavesmith`, set in `web/capacitor.config.ts`, `web/android/app/build.gradle`
 (`namespace`, `applicationId`), `res/values/strings.xml`, the Java package folder, and the
-workflow's `packageName`. **It can never change once the app is uploaded to Play.** If you
-want another, change it everywhere before the first upload.
+workflow's `packageName`. It can never change once the app is uploaded to Play.
 
 ## 2. Build locally (optional)
 

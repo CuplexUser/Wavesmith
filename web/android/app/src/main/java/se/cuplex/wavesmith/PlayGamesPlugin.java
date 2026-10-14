@@ -1,4 +1,4 @@
-package com.cuplex.wavesmith;
+package se.cuplex.wavesmith;
 
 import android.content.Intent;
 import androidx.activity.result.ActivityResult;

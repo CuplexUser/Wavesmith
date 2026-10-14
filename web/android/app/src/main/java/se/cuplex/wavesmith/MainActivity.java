@@ -1,4 +1,4 @@
-package com.cuplex.wavesmith;
+package se.cuplex.wavesmith;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;

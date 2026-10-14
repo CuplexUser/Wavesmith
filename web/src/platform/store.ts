@@ -9,7 +9,7 @@ import { isNative } from './native';
 export const FULL_GAME_PRODUCT = 'full_game';
 
 /** Where the web demo sends players for the full game. Update once the listing is live. */
-export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.cuplex.wavesmith';
+export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=se.cuplex.wavesmith';
 
 interface BillingPlugin {
   getProduct(o: { productId: string }): Promise<{ productId: string; title: string; price: string | null }>;
