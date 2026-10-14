@@ -2,6 +2,7 @@
 //! JavaScript can view them as typed arrays without copying.
 
 use wasm_bindgen::prelude::*;
+use wavesmith_core::json::parse_items;
 use wavesmith_core::{Item, Session};
 
 #[wasm_bindgen]
@@ -50,7 +51,7 @@ impl Game {
     /// returns a pointer to it (`4·width·height` bytes). Used while dragging.
     pub fn preview_overlay(&mut self, json: &str) -> Result<*const u8, JsError> {
         let items: Vec<Item> =
-            serde_json::from_str(json).map_err(|e| JsError::new(&format!("pieces JSON: {e}")))?;
+            parse_items(json).map_err(|e| JsError::new(&format!("pieces JSON: {e}")))?;
         self.session
             .preview_overlay(&items)
             .map(|o| o.as_ptr())
@@ -84,7 +85,7 @@ impl Game {
     /// Replaces the player's pieces (a JSON array of items) and restarts the run.
     pub fn set_placements(&mut self, json: &str) -> Result<(), JsError> {
         let items: Vec<Item> =
-            serde_json::from_str(json).map_err(|e| JsError::new(&format!("pieces JSON: {e}")))?;
+            parse_items(json).map_err(|e| JsError::new(&format!("pieces JSON: {e}")))?;
         self.session
             .set_placements(items)
             .map_err(|e| JsError::new(&e.to_string()))
@@ -118,6 +119,58 @@ impl Game {
     /// Discrete field energy, for diagnostics.
     pub fn field_energy(&self) -> f64 {
         self.session.field_energy()
+    }
+
+    // ---------- WebGPU path ----------
+    // The same scheme run on the GPU for display (see web/src/sim/gpuSolver.ts): per-cell
+    // coefficients and source stencils, read once after each layout change.
+
+    /// 1 for the isotropic 9-point stencil, 0 for the 5-point one.
+    pub fn gpu_isotropic(&self) -> u32 {
+        u32::from(
+            self.session.channel_solver(0).laplacian()
+                == wavesmith_core::solver::Laplacian::Isotropic,
+        )
+    }
+
+    /// Pointer to one coefficient array of a channel (`width·height` f32): 0 = `(cΔt)²`,
+    /// 1 = `1 − γΔt/2`, 2 = `1/(1 + γΔt/2)` (0 in walls).
+    pub fn gpu_coeff_ptr(&self, channel: usize, which: u32) -> *const f32 {
+        let (k, decay, inv) = self.session.channel_solver(channel).coefficients();
+        match which {
+            0 => k.as_ptr(),
+            1 => decay.as_ptr(),
+            _ => inv.as_ptr(),
+        }
+    }
+
+    /// Sources of a channel as JSON: `[{"cells":[[i,w],...],"force":f,"freq":f,"phase":p,"start":s}]`.
+    /// Empty when the board has moving sources or resonators, which the GPU path can't run.
+    pub fn gpu_sources(&self, channel: usize) -> String {
+        use std::fmt::Write;
+        if self.session.has_dynamic_actors() {
+            return "null".into();
+        }
+        let mut out = String::from("[");
+        for (n, s) in self.session.channel_sources(channel).iter().enumerate() {
+            if n > 0 {
+                out.push(',');
+            }
+            out.push_str(r#"{"cells":["#);
+            for (k, (i, w)) in s.cells.iter().enumerate() {
+                if k > 0 {
+                    out.push(',');
+                }
+                let _ = write!(out, "[{i},{w}]");
+            }
+            let _ = write!(
+                out,
+                r#"],"force":{},"freq":{},"phase":{},"start":{}}}"#,
+                s.force, s.freq, s.phase, s.start
+            );
+        }
+        out.push(']');
+        out
     }
 
     /// Amplitude envelope of each player resonator, in placement order.

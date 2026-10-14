@@ -1,0 +1,55 @@
+{
+  "chapter": 4,
+  "id": "4-1",
+  "name": "Sound Lens",
+  "description": "Waves slow down inside a lens of denser material. The thick middle holds the wave back longer than the thin edges, so a flat wave comes out curved and closes in on a point. Focus the sound onto the target.",
+  "hint": "Slower material bends more. If the focus falls short of the target, make the lens faster or move it back; if past it, the other way.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "line",
+      "a": [
+        10,
+        4
+      ],
+      "b": [
+        10,
+        156
+      ],
+      "freq": 3,
+      "amp": 0.6
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        215,
+        80
+      ],
+      "radius": 4,
+      "threshold": 1.1,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "lens": {
+      "count": 1,
+      "cost": 2,
+      "maxSize": 110
+    }
+  },
+  "budget": 2,
+  "par": {
+    "cost": 2,
+    "energy": 25
+  },
+  "timeLimit": 25
+}

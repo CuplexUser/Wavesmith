@@ -8,25 +8,30 @@
 
 use std::f64::consts::TAU;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::light::Color;
 use crate::tools::{add, dot, len, scale, seg_dist, sub, V2};
 use crate::{DT, SPONGE};
 
-fn default_amp() -> f32 {
+pub(crate) fn default_amp() -> f32 {
     1.0
 }
 
-fn default_width() -> f32 {
+pub(crate) fn default_width() -> f32 {
     22.0
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+// Deserialized by hand in `crate::json`, which keeps the WebAssembly build small.
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SourceDef {
     Point {
         pos: V2,
+        /// Cells per second; a moving source travels from `pos` until it nears the edge of the
+        /// board ([`Motion`]).
+        #[serde(default, skip_serializing_if = "crate::tools::is_still")]
+        vel: V2,
         /// Hz; ignored in light levels, where each color has its own frequency.
         #[serde(default)]
         freq: f32,
@@ -127,6 +132,12 @@ impl SourceDef {
             SourceDef::Line { a, b, .. } if len(sub(b, a)) < 2.0 => {
                 return Err("line source is too short".into());
             }
+            SourceDef::Point { vel, .. }
+                if !(vel[0].is_finite() && vel[1].is_finite())
+                    || len(vel) > crate::tools::MAX_SOURCE_SPEED + 1e-3 =>
+            {
+                return Err("source moves too fast".into());
+            }
             SourceDef::Beam { angle, width, .. }
                 if !angle.is_finite() || !(2.0..=80.0).contains(&width) =>
             {
@@ -152,10 +163,60 @@ const SIGMA: f32 = 1.2;
 /// Seconds over which a source fades in, to avoid a broadband click.
 const RAMP: f64 = 0.5;
 
+/// Keeps moving sources this many cells inside the play area.
+pub const MOTION_MARGIN: f32 = 6.0;
+
+/// Straight-line travel at constant velocity that stops at the edge of a rectangle: the play
+/// area less [`MOTION_MARGIN`] (so a source never drives into the sponge), or a player piece's
+/// placement area, which acts as its track.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Motion {
+    pub origin: V2,
+    pub vel: V2,
+    /// Seconds until the source reaches the margin and stops.
+    pub stop: f32,
+}
+
+impl Motion {
+    /// Travel within the play area of `size`, kept [`MOTION_MARGIN`] from its edges.
+    pub fn new(origin: V2, vel: V2, size: V2) -> Option<Motion> {
+        let m = MOTION_MARGIN;
+        Motion::within(origin, vel, [m, m, size[0] - m, size[1] - m])
+    }
+
+    /// Travel that stops at the edge of `rect` (`[x0, y0, x1, y1]`).
+    pub fn within(origin: V2, vel: V2, rect: [f32; 4]) -> Option<Motion> {
+        if vel[0] == 0.0 && vel[1] == 0.0 {
+            return None;
+        }
+        let mut stop = f32::INFINITY;
+        for k in 0..2 {
+            let (lo, hi) = (rect[k], rect[k + 2]);
+            if vel[k] > 0.0 {
+                stop = stop.min(((hi - origin[k]) / vel[k]).max(0.0));
+            } else if vel[k] < 0.0 {
+                stop = stop.min(((lo - origin[k]) / vel[k]).max(0.0));
+            }
+        }
+        Some(Motion { origin, vel, stop })
+    }
+
+    /// Position at time `t` (seconds since the run started).
+    pub fn at(&self, t: f64) -> V2 {
+        let t = (t as f32).min(self.stop);
+        add(self.origin, scale(self.vel, t))
+    }
+}
+
 /// A source rasterized onto the solver grid.
 #[derive(Debug, Clone)]
 pub struct Stencil {
+    /// Footprint (for moving sources, at the start position).
     pub cells: Vec<(usize, f32)>,
+    /// Set for moving sources: the footprint is recomputed every step.
+    pub motion: Option<Motion>,
+    /// Solver grid size, for recomputing a moving footprint.
+    pub grid: (usize, usize),
     /// Peak force density.
     pub force: f32,
     pub freq: f32,
@@ -191,9 +252,12 @@ impl Stencil {
         let f = freq.unwrap_or(def.freq());
         let (amp, phase, start) = def.params();
         let pi4 = 4.0 * std::f32::consts::PI;
+        let size = [(nx - 2 * SPONGE) as f32, (ny - 2 * SPONGE) as f32];
         match *def {
-            SourceDef::Point { pos, .. } => vec![Stencil {
+            SourceDef::Point { pos, vel, .. } => vec![Stencil {
                 cells: Self::point_cells(pos, nx, ny),
+                motion: Motion::new(pos, vel, size),
+                grid: (nx, ny),
                 force: pi4 * c * c * amp,
                 freq: f,
                 phase,
@@ -201,6 +265,8 @@ impl Stencil {
             }],
             SourceDef::Line { a, b, .. } => vec![Stencil {
                 cells: Self::line_cells(a, b, nx, ny),
+                motion: None,
+                grid: (nx, ny),
                 force: pi4 * f * c * amp,
                 freq: f,
                 phase,
@@ -232,6 +298,8 @@ impl Stencil {
                 vec![
                     Stencil {
                         cells: sheet(pos),
+                        motion: None,
+                        grid: (nx, ny),
                         force,
                         freq: f,
                         phase,
@@ -239,6 +307,8 @@ impl Stencil {
                     },
                     Stencil {
                         cells: sheet(add(pos, scale(dir, quarter))),
+                        motion: None,
+                        grid: (nx, ny),
                         force,
                         freq: f,
                         phase: phase - std::f32::consts::FRAC_PI_2,
@@ -249,9 +319,20 @@ impl Stencil {
         }
     }
 
-    pub fn emitter(pos: V2, freq: f32, amp: f32, phase: f32, c: f32, nx: usize, ny: usize) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn emitter(
+        pos: V2,
+        vel: V2,
+        freq: f32,
+        amp: f32,
+        phase: f32,
+        c: f32,
+        nx: usize,
+        ny: usize,
+    ) -> Self {
         let def = SourceDef::Point {
             pos,
+            vel,
             freq,
             amp,
             phase,
@@ -276,7 +357,31 @@ impl Stencil {
     /// Appends this step's forces to `out`.
     pub fn push_forces(&self, t: f64, out: &mut Vec<(usize, f32)>) {
         let f = self.value(t);
-        out.extend(self.cells.iter().map(|&(i, w)| (i, f * w)));
+        match self.motion {
+            None => out.extend(self.cells.iter().map(|&(i, w)| (i, f * w))),
+            Some(m) => {
+                let (nx, ny) = self.grid;
+                let p = m.at(t);
+                out.extend(
+                    footprint(nx, ny, p, p, |q| len(sub(q, p)))
+                        .into_iter()
+                        .map(|(i, w)| (i, f * w)),
+                );
+            }
+        }
+    }
+
+    /// Where the source is at time `t`.
+    pub fn position_at(&self, t: f64) -> Option<V2> {
+        self.motion.map(|m| m.at(t))
+    }
+
+    /// Confines a moving source to `rect` (a player piece's placement area).
+    pub fn confine(mut self, rect: Option<[f32; 4]>) -> Self {
+        if let (Some(m), Some(r)) = (self.motion, rect) {
+            self.motion = Motion::within(m.origin, m.vel, r);
+        }
+        self
     }
 }
 

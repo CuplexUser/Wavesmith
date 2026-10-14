@@ -1,0 +1,4 @@
+{
+  "note": "Emitter on an antinode line (off the marker), tuned to the chamber's 3-half-wave mode.",
+  "pieces": [{ "kind": "emitter", "pos": [80, 68], "freq": 1.04 }]
+}

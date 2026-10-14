@@ -1,0 +1,18 @@
+{
+  "note": "The Prism level's slim flint prism, upside down, so the fan rises toward the sensors.",
+  "pieces": [
+    {
+      "kind": "prism",
+      "pos": [
+        175,
+        173
+      ],
+      "size": [
+        75,
+        112
+      ],
+      "angle": 3.14159,
+      "material": "flint"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "chapter": 4,
+  "id": "4-4",
+  "name": "Fog Horn",
+  "description": "The horn sends a beam straight along the shore, but the lighthouse keeper is up on the cliff. A wedge of slow material bends a beam toward its thick end, just as a prism bends light. Steer the beam up to the keeper.",
+  "hint": "Point the wedge's thick end the way you want the beam to turn: turn the prism upside down so its base faces up.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "beam",
+      "pos": [
+        14,
+        125
+      ],
+      "angle": 0,
+      "width": 14,
+      "freq": 3
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        190,
+        70
+      ],
+      "b": [
+        256,
+        70
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        236,
+        30
+      ],
+      "radius": 6,
+      "threshold": 0.27,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "prism": {
+      "count": 1,
+      "cost": 2,
+      "maxSize": 100,
+      "material": "flint"
+    }
+  },
+  "budget": 2,
+  "par": {
+    "cost": 2,
+    "energy": 5
+  },
+  "timeLimit": 25
+}

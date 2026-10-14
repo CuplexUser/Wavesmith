@@ -6,11 +6,17 @@ import { Editor } from '../input/editor';
 import { chapterLevels, nextLevel } from '../levels';
 import { countOf, remaining, totalCost } from '../placement';
 import { FieldRenderer } from '../render/fieldRenderer';
-import { colorsHex, OverlayRenderer } from '../render/overlay';
+import { OverlayRenderer } from '../render/overlay';
+import { colorsHex } from '../render/palette';
 import { Sim } from '../sim/bridge';
+import { PerfMonitor } from '../sim/perf';
 import { Stepper } from '../sim/stepper';
+import { shareUrl } from '../share';
+import { checkPlacements, tunes } from '../placement';
+import { MAX_SOURCE_SPEED } from '../geometry';
 import {
   TOOL_ORDER,
+  type Tune,
   type Color,
   type Goal,
   type Item,
@@ -21,6 +27,9 @@ import {
   type V2,
 } from '../types';
 import { h, setStyle, setText } from './dom';
+import { openSettings } from './settings';
+import { Tutorial } from './tutorial';
+import { saveSession, type EditorSession } from './levelEditor';
 import { ICONS, TOOL_ICONS, TOOL_NAMES } from './icons';
 
 const GOAL_LABEL: Record<Goal['kind'], string> = {
@@ -64,13 +73,13 @@ function goalText(g: Goal, light: boolean): string {
   }
 }
 
-export function playScreen(app: App, levelId: string): Screen {
-  const level = [...app.catalog.levels.values()].find((l) => l.id === levelId);
+export function playScreen(app: App, levelId: string, layout?: Item[], custom?: EditorSession): Screen {
+  const level = custom?.level ?? [...app.catalog.levels.values()].find((l) => l.id === levelId);
   if (!level) {
     app.go({ screen: 'select' });
     return { destroy() {} };
   }
-  return new PlayScreen(app, level);
+  return new PlayScreen(app, level, custom ? custom.solution : layout, custom);
 }
 
 class PlayScreen implements Screen {
@@ -79,6 +88,11 @@ class PlayScreen implements Screen {
   private overlay: OverlayRenderer;
   private editor: Editor;
   private stepper: Stepper;
+  private perf: PerfMonitor;
+  /** Normal sim speed: 1, or faster in light levels on devices that can afford it. */
+  private baseSpeed = 1;
+  private fast = false;
+  private speedChosen = false;
   private status: Status;
   private light: boolean;
   private raf = 0;
@@ -89,6 +103,9 @@ class PlayScreen implements Screen {
   private resultShown = false;
   private toastTimer: number | undefined;
   private resizeObs: ResizeObserver;
+  private unlisten: () => void;
+  /** Set when the level has a walkthrough to replay. */
+  private showTutorial: (() => void) | null = null;
   /** Cell index of the first goal, for sampling the live wave there. */
   private probeCell = 0;
 
@@ -97,10 +114,22 @@ class PlayScreen implements Screen {
   private stage: HTMLElement;
   private glCanvas = h('canvas', { class: 'layer' });
   private ovCanvas = h('canvas', { class: 'layer overlay' });
-  private board = h('div', { class: 'board' });
+  private board = h('div', {
+    class: 'board',
+    tabindex: 0,
+    role: 'application',
+    'aria-roledescription': 'puzzle board',
+    'aria-describedby': 'board-keys',
+  });
+  /** Screen-reader announcements: goal progress, results, and the selected piece. */
+  private srEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' });
+  private lastGoalState: string[] = [];
+  private lastSelection = '';
   private toastEl = h('div', { class: 'toast', role: 'status', 'aria-live': 'polite' });
   private bannerEl = h('div', { class: 'banner', hidden: true });
   private trashEl = h('div', { class: 'trash-hint', hidden: true }, 'Release to remove');
+  private slowEl = h('div', { class: 'slow-badge', hidden: true, title: 'This device is running the simulation slower than real time' }, 'Slow motion');
+  private statsEl = h('div', { class: 'perf-stats mono', hidden: true, 'aria-hidden': 'true' });
   private pieceBar = h('div', { class: 'piece-bar', hidden: true, role: 'toolbar', 'aria-label': 'Selected piece' });
   private paletteEl = h('div', { class: 'palette' });
   private budgetEl = h('div', { class: 'budget' });
@@ -119,17 +148,33 @@ class PlayScreen implements Screen {
   constructor(
     private app: App,
     private level: Level,
+    layout?: Item[],
+    /** Set when play-testing a level from the editor: layouts are saved as its solution. */
+    private custom?: EditorSession,
   ) {
     this.sim = new Sim(level);
     this.light = this.sim.isLight;
     this.stepper = new Stepper(this.sim.stepsPerSecond);
+    this.perf = new PerfMonitor(this.sim.stepsPerSecond, Math.min(window.devicePixelRatio || 1, 2));
     this.status = this.sim.status();
 
     this.board.append(this.glCanvas, this.ovCanvas);
-    this.stage = h('div', { class: 'stage' }, this.board, this.pieceBar, this.trashEl, this.toastEl, this.bannerEl);
+    this.board.setAttribute('aria-label', `${level.name}: ${level.description ?? ''}`);
+    this.stage = h(
+      'div',
+      { class: 'stage' },
+      this.board,
+      this.pieceBar,
+      this.trashEl,
+      this.toastEl,
+      this.bannerEl,
+      this.slowEl,
+      this.statsEl,
+    );
     this.field = new FieldRenderer(this.glCanvas);
-    this.field.setGrid(this.sim.nx, this.sim.ny, this.light ? 'light' : 'sound');
-    this.field.gain = this.light ? 2.2 : 1.6;
+    const display = level.display ?? {};
+    this.field.setGrid(this.sim.nx, this.sim.ny, this.light ? 'light' : display.palette === 'water' ? 'water' : 'sound');
+    this.field.gain = display.gain ?? (this.light ? 2.2 : 1.6);
     this.field.uploadOverlay(this.sim.overlay());
     this.overlay = new OverlayRenderer(this.ovCanvas);
     const g0 = level.goals[0];
@@ -174,6 +219,8 @@ class PlayScreen implements Screen {
     this.fastBtn = btn('Fast forward (F)', ICONS.fast, () => this.toggleFast());
     this.undoBtn = btn('Undo (Ctrl+Z)', ICONS.undo, () => this.editor.undo());
     this.deleteBtn = btn('Remove piece (Del)', ICONS.trash, () => this.editor.deleteSelected());
+    const shareBtn = btn('Copy a link to this layout', ICONS.share, () => void this.share());
+    const settingsBtn = btn('Settings', ICONS.gear, () => openSettings(app, { onTutorial: () => this.showTutorial?.() }));
     const soundBtn = btn('Sound (M)', app.audio.muted ? ICONS.muted : ICONS.sound, () => {
       soundBtn.innerHTML = app.toggleMute() ? ICONS.muted : ICONS.sound;
     });
@@ -206,7 +253,7 @@ class PlayScreen implements Screen {
     const topbar = h(
       'header',
       { class: 'topbar' },
-      btn('Back to levels (Esc)', ICONS.back, () => app.go({ screen: 'select' })),
+      btn(custom ? 'Back to the editor (Esc)' : 'Back to levels (Esc)', ICONS.back, () => this.leave()),
       h('div', { class: 'title-block' }, h('span', { class: 'level-id mono' }, level.id), h('h1', {}, level.name)),
       h('div', { class: 'goals' }, ...goals),
       h('div', { class: 'clock' }, this.timeEl),
@@ -247,6 +294,11 @@ class PlayScreen implements Screen {
           h('span', { class: 'inline-icon', html: ICONS.trash }),
           ', to remove it.',
         ),
+        h(
+          'p',
+          { class: 'how keys', id: 'board-keys' },
+          'Keys: number keys pick a piece, Enter places it, [ and ] select pieces, arrows move them (Shift for 5 cells), Q and E rotate, Delete removes, Space pauses, R restarts.',
+        ),
       ),
       this.tuneEl,
       h(
@@ -263,7 +315,9 @@ class PlayScreen implements Screen {
         btn('Restart run (R)', ICONS.restart, () => this.restartRun()),
         this.pauseBtn,
         this.fastBtn,
+        shareBtn,
         soundBtn,
+        settingsBtn,
       ),
     );
 
@@ -274,11 +328,15 @@ class PlayScreen implements Screen {
       this.stage,
       panel,
       this.resultEl,
+      this.srEl,
     );
     app.root.append(this.root);
 
     this.buildPalette();
+    if (layout && layout.length > 0) this.loadShared(layout);
     this.onEditorChange();
+    this.unlisten = app.onSettings(() => this.applySettings(soundBtn));
+    this.applySettings(soundBtn);
     this.resizeObs = new ResizeObserver(() => this.layout());
     this.resizeObs.observe(this.stage);
     this.layout();
@@ -287,12 +345,63 @@ class PlayScreen implements Screen {
     const all = app.catalog.chapters.flatMap((c) => chapterLevels(app.catalog, c));
     app.audio.enterLevel(this.light ? 'light' : 'sound', Math.max(0, all.findIndex((l) => l.id === level.id)));
     this.raf = requestAnimationFrame(this.frame);
+    if (level.id === '1-1') {
+      this.showTutorial = () => this.startTutorial();
+      if (!app.settings.tutorialSeen && !layout) this.startTutorial();
+    }
+  }
+
+  /** The Chapter 1 walkthrough. */
+  private startTutorial(): void {
+    const level = this.level;
+    const src = level.sources[0];
+    const goal = level.goals[0];
+    const boardRect = (p: V2, r: number): DOMRect => {
+      const b = this.board.getBoundingClientRect();
+      const k = b.width / level.grid.width;
+      return new DOMRect(b.left + (p[0] - r) * k, b.top + (p[1] - r) * k, 2 * r * k, 2 * r * k);
+    };
+    const startCount = this.editor.items.length;
+    new Tutorial(
+      this.root,
+      [
+        {
+          title: 'Every ripple is real',
+          body: 'This speaker sends out sound waves. They spread, bounce off walls, and add up or cancel, just like real sound.',
+          target: () => (src && src.kind === 'point' ? boardRect(src.pos, 12) : null),
+        },
+        {
+          title: 'Reach the target',
+          body: 'Make the waves strong here and keep them strong. The meter at the top fills as the target gets louder.',
+          target: () => (goal && 'pos' in goal ? boardRect(goal.pos, 14) : null),
+        },
+        {
+          title: 'Pick a piece',
+          body: 'Choose the wall from your pieces. Each piece costs part of your budget.',
+          target: () => this.paletteEl.getBoundingClientRect(),
+          done: () => this.editor.armed !== null,
+        },
+        {
+          title: 'Place it on the board',
+          body: 'Tap the board to drop it, then drag it to move it or drag its ends to turn it. The run restarts each time you change something.',
+          target: () => this.board.getBoundingClientRect(),
+          done: () => this.editor.items.length > startCount,
+        },
+        {
+          title: 'Bounce the waves',
+          body: 'Angle the wall so the waves reflect down past the barrier onto the target. Solve it, then use fewer parts and less energy for more stars.',
+          target: () => this.board.getBoundingClientRect(),
+        },
+      ],
+      () => this.app.setSetting('tutorialSeen', true),
+    );
   }
 
   destroy(): void {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKey);
     this.resizeObs.disconnect();
+    this.unlisten();
     this.editor.dispose();
     this.sim.dispose();
     window.clearTimeout(this.toastTimer);
@@ -310,7 +419,7 @@ class PlayScreen implements Screen {
     const hgt = Math.floor(height * s);
     setStyle(this.board, 'width', `${w}px`);
     setStyle(this.board, 'height', `${hgt}px`);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = this.perf.dpr;
     this.field.resize(w, hgt, dpr);
     this.overlay.resize(w, hgt, dpr, width);
     this.overlayDirty = true;
@@ -331,6 +440,10 @@ class PlayScreen implements Screen {
     } catch (e) {
       return e instanceof Error ? e.message : String(e);
     }
+    if (this.custom) {
+      this.custom.solution = items;
+      saveSession(this.custom);
+    }
     this.afterRestart();
     return null;
   }
@@ -346,6 +459,7 @@ class PlayScreen implements Screen {
   }
 
   private afterRestart(): void {
+    this.lastGoalState = [];
     this.field.uploadOverlay(this.sim.overlay());
     this.stepper.reset();
     this.announced = false;
@@ -358,12 +472,17 @@ class PlayScreen implements Screen {
 
   private frame = (now: number): void => {
     this.raf = requestAnimationFrame(this.frame);
-    const n = this.resultShown ? 0 : this.stepper.advance(now - this.last);
+    const dt = now - this.last;
+    const n = this.resultShown ? 0 : this.stepper.advance(dt);
     this.last = now;
     if (n > 0) {
+      const t0 = performance.now();
       this.sim.step(n);
+      this.perf.record(dt, n, performance.now() - t0, this.stepper.speed);
+      this.stepper.budget = this.perf.stepBudget();
       this.status = this.sim.status();
       this.onStatus();
+      this.tunePerformance();
     }
     this.field.uploadField(this.sim.image());
     this.field.draw(this.level.grid.width, this.level.grid.height, this.sim.border);
@@ -380,7 +499,10 @@ class PlayScreen implements Screen {
         snap: this.editor.snap,
         trash: this.editor.trash,
         goals: this.status.goals,
-        time: this.status.time,
+        // Reduced motion freezes the pulsing glyphs.
+        time: this.app.reducedMotion ? 0 : this.status.time,
+        simTime: this.status.time,
+        armed: this.editor.armed,
         resonance: this.sim.resonatorAmplitudes(),
         handleSize: this.editor.handleSize,
       });
@@ -389,6 +511,49 @@ class PlayScreen implements Screen {
       this.board.classList.toggle('trash', this.editor.trash);
     }
   };
+
+  private applySettings(soundBtn: HTMLElement): void {
+    const s = this.app.settings;
+    this.field.waves = this.app.reducedMotion ? 0 : 1;
+    this.statsEl.hidden = !s.perfStats;
+    soundBtn.innerHTML = s.muted ? ICONS.muted : ICONS.sound;
+    // Goal accents follow the light palette.
+    this.level.goals.forEach((g, i) => {
+      const el = this.goalEls[i];
+      if (el && this.light && (g.kind === 'focus' || g.kind === 'silence')) {
+        el.root.style.setProperty('--goal-color', colorsHex(g.colors));
+      }
+    });
+    this.overlayDirty = true;
+  }
+
+  /** Adjusts speed and resolution to what the device sustains, and updates the stats. */
+  private tunePerformance(): void {
+    if (!this.speedChosen && this.light) {
+      const afford = this.perf.affordableSpeed();
+      if (!Number.isNaN(afford)) {
+        // Light crosses the board in about 7 s at real time; run up to twice as fast when the
+        // device can keep a smooth frame rate doing it.
+        this.speedChosen = true;
+        this.baseSpeed = Math.max(1, Math.min(2, Math.floor(afford * 2) / 2));
+        this.applySpeed();
+      }
+    }
+    if (this.perf.suggestDpr() !== null) this.layout();
+    const r = this.perf.reading();
+    this.slowEl.hidden = !r.slow || this.stepper.paused;
+    if (!this.statsEl.hidden) {
+      setText(
+        this.statsEl,
+        `${r.fps.toFixed(0)} fps · ${r.msPerStep.toFixed(2)} ms/step · ×${r.simRate.toFixed(2)} of ×${this.stepper.speed} · dpr ${r.dpr}`,
+      );
+    }
+  }
+
+  private applySpeed(): void {
+    this.stepper.speed = this.baseSpeed * (this.fast ? 3 : 1);
+    this.fastBtn.classList.toggle('active', this.fast);
+  }
 
   private onStatus(): void {
     const st = this.status;
@@ -420,15 +585,26 @@ class PlayScreen implements Screen {
       if (g0.kind !== 'silence') this.app.buckets.update(ratio);
     }
 
+    const states = st.goals.map((g) => (g.complete ? 'complete' : g.met ? 'met' : 'open'));
+    states.forEach((state, i) => {
+      if (state !== this.lastGoalState[i] && state !== 'open') {
+        const g = this.level.goals[i];
+        const name = g ? goalLabel(g, this.light) : 'Goal';
+        this.announce(state === 'met' ? `${name} reached. Hold it.` : `${name} done.`);
+      }
+    });
+    this.lastGoalState = states;
     if (st.solved && !this.announced) {
+      this.announce(`Solved with ${st.solved.stars} of 3 stars.`);
       this.announced = true;
-      this.app.progress.record(this.level.id, st.solved.stars);
+      if (!this.custom) this.app.progress.record(this.level.id, st.solved.stars);
       this.app.audio.fanfare(st.solved.stars);
       this.app.haptics.success();
       window.setTimeout(() => this.showResult(), 700);
     }
     if (st.timedOut && !this.timeoutAnnounced) {
       this.timeoutAnnounced = true;
+      this.announce('Out of time. Move a piece or restart the run.');
       this.app.audio.timeout();
     }
     this.bannerEl.hidden = !st.timedOut;
@@ -446,6 +622,11 @@ class PlayScreen implements Screen {
 
   private onEditorChange(): void {
     this.overlayDirty = true;
+    const i = this.editor.selected;
+    const item = i !== null ? this.editor.items[i] : undefined;
+    const sel = item ? `${TOOL_NAMES[item.kind]} ${i! + 1} of ${this.editor.items.length} selected.` : '';
+    if (sel && sel !== this.lastSelection) this.announce(sel);
+    this.lastSelection = sel;
     this.buildPalette();
     this.undoBtn.disabled = !this.editor.canUndo;
     this.deleteBtn.disabled = this.editor.selected === null;
@@ -583,14 +764,45 @@ class PlayScreen implements Screen {
       return h('label', { class: 'slider' }, h('span', { class: 'label' }, label), input, out);
     };
     const rows: HTMLElement[] = [];
+    const can = (t: Tune) => tunes(this.level, item.kind, t);
     if (item.kind === 'emitter') {
-      rows.push(slider('Frequency', item.freq, 0.5, 8, 0.05, (v) => `${v.toFixed(2)} Hz`, (v) => ({ ...item, freq: v })));
-      const deg = ((item.phase ?? 0) * 180) / Math.PI;
-      rows.push(
-        slider('Phase', deg, 0, 360, 5, (v) => `${v.toFixed(0)}°`, (v) => ({ ...item, phase: (v * Math.PI) / 180 })),
-      );
+      if (can('freq')) {
+        rows.push(slider('Frequency', item.freq, 0.5, 8, 0.01, (v) => `${v.toFixed(2)} Hz`, (v) => ({ ...item, freq: v })));
+      }
+      if (can('phase')) {
+        const deg = ((item.phase ?? 0) * 180) / Math.PI;
+        rows.push(
+          slider('Phase', deg, 0, 360, 5, (v) => `${v.toFixed(0)}°`, (v) => ({ ...item, phase: (v * Math.PI) / 180 })),
+        );
+      }
+      if (can('amp')) {
+        rows.push(slider('Strength', item.amp ?? 1, 0, 2, 0.01, (v) => `${Math.round(v * 100)}%`, (v) => ({ ...item, amp: v })));
+      }
+      if (can('speed')) {
+        const vel = item.vel ?? [0, 0];
+        const speed = Math.hypot(vel[0], vel[1]);
+        const heading = speed > 0 ? Math.atan2(vel[1], vel[0]) : 0;
+        const withVel = (s: number, a: number): Item => ({ ...item, vel: [s * Math.cos(a), s * Math.sin(a)] });
+        rows.push(
+          slider('Speed', speed, 0, MAX_SOURCE_SPEED, 0.5, (v) => `${v.toFixed(1)} cells/s`, (v) => withVel(v, heading)),
+          slider(
+            'Heading',
+            (((heading * 180) / Math.PI) % 360 + 360) % 360,
+            0,
+            355,
+            5,
+            (v) => `${v.toFixed(0)}°`,
+            (v) => withVel(speed, (v * Math.PI) / 180),
+          ),
+        );
+      }
+      if (rows.length === 0) rows.push(h('p', { class: 'material' }, `${item.freq.toFixed(2)} Hz, fixed in this level`));
     } else if (item.kind === 'resonator') {
-      rows.push(slider('Tuning', item.freq, 0.5, 8, 0.05, (v) => `${v.toFixed(2)} Hz`, (v) => ({ ...item, freq: v })));
+      rows.push(
+        can('freq')
+          ? slider('Tuning', item.freq, 0.5, 8, 0.01, (v) => `${v.toFixed(2)} Hz`, (v) => ({ ...item, freq: v }))
+          : h('p', { class: 'material' }, `Rings at ${item.freq.toFixed(2)} Hz`),
+      );
     } else if ((item.kind === 'lens' || item.kind === 'prism' || item.kind === 'slab') && item.material) {
       rows.push(h('p', { class: 'material' }, MATERIAL_NAME[item.material]));
     } else if (item.kind === 'lens') {
@@ -604,6 +816,40 @@ class PlayScreen implements Screen {
     const title = item.kind === 'lens' && item.material ? 'Glass lens' : TOOL_NAMES[item.kind];
     this.tuneEl.replaceChildren(h('h2', { class: 'label' }, title), ...rows);
     this.tuneEl.hidden = false;
+  }
+
+  private leave(): void {
+    this.app.go(this.custom ? { screen: 'editor' } : { screen: 'select' });
+  }
+
+  /** Places a layout from a shared link, if the level accepts it. */
+  private loadShared(items: Item[]): void {
+    const err = checkPlacements(this.level, items) ?? this.commit(items);
+    if (err) {
+      this.toast(`The shared layout doesn't fit this level: ${err}`);
+      return;
+    }
+    this.editor.load(items);
+    this.toast('Loaded a shared layout');
+  }
+
+  /** Copies a link that reopens this level with the current pieces. */
+  private async share(): Promise<void> {
+    const url = shareUrl(this.level.id, this.editor.items);
+    try {
+      await navigator.clipboard.writeText(url);
+      this.toast('Link copied');
+    } catch {
+      // Clipboard access can be blocked; put the link in the address bar instead.
+      history.replaceState(null, '', url);
+      this.toast('Link is in the address bar');
+    }
+  }
+
+  private announce(message: string): void {
+    // Clear first so repeating the same message is still read out.
+    this.srEl.textContent = '';
+    window.setTimeout(() => setText(this.srEl, message), 30);
   }
 
   private toast(message: string): void {
@@ -622,8 +868,12 @@ class PlayScreen implements Screen {
   }
 
   private toggleFast(): void {
-    this.stepper.speed = this.stepper.speed > 1 ? 1 : 3;
-    this.fastBtn.classList.toggle('active', this.stepper.speed > 1);
+    this.fast = !this.fast;
+    this.applySpeed();
+  }
+
+  private togglePerfStats(): void {
+    this.app.setSetting('perfStats', !this.app.settings.perfStats);
   }
 
   private onKey = (e: KeyboardEvent): void => {
@@ -662,12 +912,16 @@ class PlayScreen implements Screen {
       case 'M':
         this.app.toggleMute();
         break;
+      case 'p':
+      case 'P':
+        this.togglePerfStats();
+        break;
       case 'h':
       case 'H':
         this.hintEl.hidden = !this.hintEl.hidden;
         break;
       case 'Escape':
-        this.app.go({ screen: 'select' });
+        this.leave();
         break;
     }
   };
@@ -679,7 +933,7 @@ class PlayScreen implements Screen {
     if (!s) return;
     this.resultShown = true;
     this.app.audio.silence();
-    const next = nextLevel(this.app.catalog, this.level.id);
+    const next = this.custom ? null : nextLevel(this.app.catalog, this.level.id);
     const best = this.app.progress.stars(this.level.id);
     const row = (on: boolean, title: string, detail: string) =>
       h(
@@ -705,9 +959,11 @@ class PlayScreen implements Screen {
         'div',
         { class: 'result-actions' },
         h('button', { class: 'btn', onclick: () => this.hideResult() }, 'Keep tuning'),
-        next
-          ? h('button', { class: 'btn primary', onclick: () => this.app.go({ screen: 'play', levelId: next.id }) }, 'Next level')
-          : h('button', { class: 'btn primary', onclick: () => this.app.go({ screen: 'select' }) }, 'All levels'),
+        this.custom
+          ? h('button', { class: 'btn primary', onclick: () => this.leave() }, 'Back to the editor')
+          : next
+            ? h('button', { class: 'btn primary', onclick: () => this.app.go({ screen: 'play', levelId: next.id }) }, 'Next level')
+            : h('button', { class: 'btn primary', onclick: () => this.app.go({ screen: 'select' }) }, 'All levels'),
       ),
     );
     this.resultEl.replaceChildren(card);

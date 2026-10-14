@@ -13,7 +13,7 @@ import {
   scale,
   sub,
 } from './geometry';
-import type { Item, Level, ToolKind, V2 } from './types';
+import type { Item, Level, ToolKind, Tune, V2 } from './types';
 
 const SOURCE_CLEARANCE = 3;
 const GOAL_CLEARANCE = 1;
@@ -69,6 +69,10 @@ export function checkPlacements(level: Level, items: Item[]): string | null {
     const { width, height } = level.grid;
     for (const p of controlPoints(item)) {
       if (p[0] < 0 || p[1] < 0 || p[0] > width || p[1] > height) return 'Keep pieces on the board';
+      const a = entry.area;
+      if (a && (p[0] < a[0] || p[1] < a[1] || p[0] > a[2] || p[1] > a[3])) {
+        return `Keep the ${item.kind} inside its marked area`;
+      }
     }
     if (isObstacle(item)) {
       for (const p of sourcePoints(level)) {
@@ -88,11 +92,20 @@ export function checkPlacements(level: Level, items: Item[]): string | null {
   return null;
 }
 
+/** Whether the player may change `t` on pieces of `kind` (mirrors `InventoryEntry::tunes`). */
+export function tunes(level: Level, kind: ToolKind, t: Tune): boolean {
+  const list = level.inventory[kind]?.tune;
+  if (list) return list.includes(t);
+  if (kind === 'emitter') return t === 'freq' || t === 'phase';
+  if (kind === 'resonator') return t === 'freq';
+  return false;
+}
+
 /** A new piece of `kind` centered on `p`, sized to fit the level's cap. */
 export function createItem(level: Level, kind: ToolKind, p: V2): Item {
   const cap = level.inventory[kind]?.maxSize ?? Infinity;
   const span = (want: number) => Math.min(want, cap);
-  const freq = level.sources[0]?.freq ?? 3;
+  const freq = level.inventory[kind]?.freq ?? level.sources[0]?.freq ?? 3;
   const material = level.inventory[kind]?.material;
   switch (kind) {
     case 'wall': {

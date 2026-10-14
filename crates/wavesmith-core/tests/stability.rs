@@ -42,6 +42,7 @@ fn random_boards_stay_bounded() {
             freq: rng.range(1.0, 6.0),
             amp: 1.0,
             phase: 0.0,
+            vel: [0.0, 0.0],
         });
         let mut s = Session::new(level).unwrap();
         s.set_placements(items)

@@ -62,6 +62,8 @@ export class AudioEngine {
   private lastStep = -1;
   private lastMilestone = 0;
   muted = false;
+  /** Master volume, 0..1. */
+  volume = 0.9;
 
   get running(): boolean {
     return this.ctx?.state === 'running';
@@ -83,7 +85,7 @@ export class AudioEngine {
     comp.threshold.value = -18;
     comp.ratio.value = 3;
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.9;
+    this.master.gain.value = this.muted ? 0 : this.volume;
     comp.connect(this.master).connect(ctx.destination);
 
     this.dry = ctx.createGain();
@@ -196,7 +198,17 @@ export class AudioEngine {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
-    if (this.ctx && this.master) this.master.gain.setTargetAtTime(muted ? 0 : 0.9, this.ctx.currentTime, 0.05);
+    this.applyGain();
+  }
+
+  setVolume(volume: number): void {
+    this.volume = Math.max(0, Math.min(1, volume));
+    this.applyGain();
+  }
+
+  private applyGain(): void {
+    const g = this.muted ? 0 : this.volume;
+    if (this.ctx && this.master) this.master.gain.setTargetAtTime(g, this.ctx.currentTime, 0.05);
   }
 
   /** Sets the key and voice for a level and fades the pad in. `seed` varies the key per level. */

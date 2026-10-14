@@ -5,6 +5,7 @@
 //! number of steps taken.
 
 pub mod goals;
+pub mod json;
 pub mod level;
 pub mod light;
 pub mod materials;

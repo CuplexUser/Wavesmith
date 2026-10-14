@@ -1,0 +1,62 @@
+{
+  "chapter": 2,
+  "id": "2-2",
+  "name": "Two Voices",
+  "description": "Two sources of the same pitch make bands of loud and quiet. Add a second voice so a quiet band lands on the zone and a loud one on the target just below it.",
+  "hint": "Waves that travel the same distance arrive in step. Put the emitter where it is as far from the zone as the speaker is, then flip its phase.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        40,
+        64
+      ],
+      "freq": 3
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        215,
+        135
+      ],
+      "radius": 5,
+      "threshold": 0.45,
+      "hold": 3
+    },
+    {
+      "kind": "silence",
+      "pos": [
+        215,
+        80
+      ],
+      "radius": 5,
+      "threshold": 0.07,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "tune": [
+        "phase"
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 70
+  },
+  "timeLimit": 25
+}

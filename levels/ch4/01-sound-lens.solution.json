@@ -1,0 +1,4 @@
+{
+  "note": "A tall oval lens at 70% speed, about 100 cells before the target.",
+  "pieces": [{ "kind": "lens", "pos": [110, 80], "radii": [18, 54], "ratio": 0.7 }]
+}

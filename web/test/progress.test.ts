@@ -45,3 +45,32 @@ describe('ProgressStore', () => {
     expect(new ProgressStore(mem).stars('1-1')).toBe(0);
   });
 });
+
+describe('settings', () => {
+  it('reads older saves that kept settings at the top level', () => {
+    const mem = new MemoryStorage();
+    mem.setItem('wavesmith.progress.v1', JSON.stringify({ stars: {}, muted: true, haptics: false }));
+    const s = new ProgressStore(mem).settings;
+    expect(s.muted).toBe(true);
+    expect(s.haptics).toBe(false);
+    expect(s.palette).toBe('standard');
+  });
+
+  it('persists typed settings', () => {
+    const mem = new MemoryStorage();
+    const a = new ProgressStore(mem);
+    a.setSetting('palette', 'colorblind');
+    a.setSetting('volume', 0.4);
+    const b = new ProgressStore(mem).settings;
+    expect(b.palette).toBe('colorblind');
+    expect(b.volume).toBe(0.4);
+  });
+
+  it('merges saves keeping the best stars', () => {
+    const a = new ProgressStore(new MemoryStorage());
+    a.record('1-1', 2);
+    a.record('1-2', 3);
+    a.merge({ stars: { '1-1': 3, '1-2': 1, '1-3': 2 } });
+    expect([a.stars('1-1'), a.stars('1-2'), a.stars('1-3')]).toEqual([3, 3, 2]);
+  });
+});

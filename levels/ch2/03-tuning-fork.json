@@ -1,0 +1,69 @@
+{
+  "chapter": 2,
+  "id": "2-3",
+  "name": "Tuning Fork",
+  "description": "This machine hums lower than the last one. Anti-noise only cancels a wave of exactly the same pitch: any mismatch beats in and out. Match the frequency, then the phase.",
+  "hint": "Listen to the zone's meter: while the pitches differ it swells and fades. Tune the frequency until the swelling stops, then turn the phase.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        30,
+        40
+      ],
+      "freq": 2.5
+    }
+  ],
+  "fixed": [
+    {
+      "kind": "wall",
+      "a": [
+        90,
+        100
+      ],
+      "b": [
+        90,
+        160
+      ],
+      "thickness": 4
+    }
+  ],
+  "goals": [
+    {
+      "kind": "silence",
+      "pos": [
+        210,
+        120
+      ],
+      "radius": 7,
+      "threshold": 0.075,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "freq": 3.2,
+      "tune": [
+        "freq",
+        "phase",
+        "amp"
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 40
+  },
+  "timeLimit": 30
+}

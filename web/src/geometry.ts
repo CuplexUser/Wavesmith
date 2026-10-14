@@ -202,6 +202,39 @@ export function translate(item: Item, d: V2): Item {
   return { ...item, pos: add(item.pos, d) };
 }
 
+/** Keeps moving sources this far inside the play area (matches `MOTION_MARGIN` in the core). */
+export const MOTION_MARGIN = 6;
+/** Fastest a moving source may travel (matches `MAX_SOURCE_SPEED` in the core). */
+export const MAX_SOURCE_SPEED = 36;
+
+/** A rectangle `[x0, y0, x1, y1]`. */
+export type Rect = [number, number, number, number];
+
+/** The rectangle a moving source travels in: its track (a placement area) if it has one,
+ * else the play area less the margin. */
+export function motionRect(size: V2, track?: Rect): Rect {
+  return track ?? [MOTION_MARGIN, MOTION_MARGIN, size[0] - MOTION_MARGIN, size[1] - MOTION_MARGIN];
+}
+
+/** Seconds until a source moving from `origin` at `vel` reaches the edge of `rect` and stops
+ * (mirrors `Motion::within` in the core). */
+export function motionStop(origin: V2, vel: V2, rect: Rect): number {
+  let stop = Infinity;
+  for (const k of [0, 1] as const) {
+    const lo = k === 0 ? rect[0] : rect[1];
+    const hi = k === 0 ? rect[2] : rect[3];
+    if (vel[k] > 0) stop = Math.min(stop, Math.max(0, (hi - origin[k]) / vel[k]));
+    else if (vel[k] < 0) stop = Math.min(stop, Math.max(0, (lo - origin[k]) / vel[k]));
+  }
+  return stop;
+}
+
+/** Where a moving source is at time `t` (mirrors `Motion::at` in the core). */
+export function motionAt(origin: V2, vel: V2 | undefined, t: number, rect: Rect): V2 {
+  if (!vel || (vel[0] === 0 && vel[1] === 0)) return origin;
+  return add(origin, scale(vel, Math.min(t, motionStop(origin, vel, rect))));
+}
+
 export function clone(item: Item): Item {
   return JSON.parse(JSON.stringify(item)) as Item;
 }

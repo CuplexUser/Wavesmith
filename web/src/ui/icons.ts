@@ -29,6 +29,9 @@ export const TOOL_NAMES: Record<ToolKind, string> = {
 
 export const ICONS = {
   back: svg('<path d="M15 5l-7 7 7 7"/>'),
+  close: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  gear: svg('<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.2 6.5l2.6 1.5M17.2 16l2.6 1.5M4.2 17.5l2.6-1.5M17.2 8l2.6-1.5"/><circle cx="12" cy="12" r="6.5"/>'),
+  share: svg('<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/>'),
   undo: svg('<path d="M9 5 4 10l5 5"/><path d="M4 10h11a5 5 0 0 1 0 10h-3"/>'),
   trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
   restart: svg('<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/>'),

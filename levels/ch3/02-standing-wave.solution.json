@@ -1,0 +1,4 @@
+{
+  "note": "Wall surface two nodes (one wavelength) past the right-hand node.",
+  "pieces": [{ "kind": "wall", "a": [181.5, 10], "b": [181.5, 150] }]
+}

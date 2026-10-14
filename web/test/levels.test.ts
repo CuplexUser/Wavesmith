@@ -75,3 +75,10 @@ describe('level catalog', () => {
     expect(nextLevel(two, '1-1')?.id).toBe('2-1');
   });
 });
+
+describe('unlocking', () => {
+  it('opens every level when asked (development builds)', () => {
+    const states = levelStates(catalog, () => 0, true);
+    expect([...states.values()].every((s) => s === 'open')).toBe(true);
+  });
+});

@@ -1,0 +1,50 @@
+{
+  "chapter": 4,
+  "id": "4-2",
+  "name": "Whale Song",
+  "description": "Whales call across whole oceans by singing into a layer of slow water. Sound that tries to leave a slow layer at a shallow angle is bent back in, so the layer carries it like a pipe instead of letting it spread. Build a channel to the listener.",
+  "hint": "Stretch the lens into a long, thin strip that starts just past the singer and ends at the listener.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.08
+  },
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        16,
+        80
+      ],
+      "freq": 3
+    }
+  ],
+  "goals": [
+    {
+      "kind": "focus",
+      "pos": [
+        242,
+        80
+      ],
+      "radius": 4,
+      "threshold": 0.7,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "lens": {
+      "count": 1,
+      "cost": 2,
+      "maxSize": 240
+    }
+  },
+  "budget": 2,
+  "par": {
+    "cost": 2,
+    "energy": 33
+  },
+  "timeLimit": 25
+}

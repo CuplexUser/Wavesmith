@@ -3,14 +3,15 @@
 //! Amplitudes are smoothed with an exponential moving average of `u²` over about one wave period
 //! and reported as `√(2·⟨u²⟩)`, which equals the peak amplitude of a steady sinusoid.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::light::Color;
 use crate::oscillator::Oscillator;
 use crate::tools::{len, sub, V2};
 use crate::{DT, SPONGE};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+// Deserialized by hand in `crate::json`, which keeps the WebAssembly build small.
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Goal {
     /// Amplitude at the target reaches `threshold` and holds for `hold` seconds.
@@ -56,7 +57,7 @@ pub enum Goal {
     },
 }
 
-fn default_q() -> f32 {
+pub(crate) fn default_q() -> f32 {
     30.0
 }
 

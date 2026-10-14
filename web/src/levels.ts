@@ -46,13 +46,18 @@ export function chapterLevels(catalog: Catalog, chapter: ChapterDef): Level[] {
  * A level opens once the one before it in its chapter is solved; the first level of each
  * playable chapter opens once the previous chapter's last level is solved.
  */
-export function levelStates(catalog: Catalog, stars: (id: string) => number): Map<string, LevelState> {
+export function levelStates(
+  catalog: Catalog,
+  stars: (id: string) => number,
+  /** Open everything (development builds, for playtesting paid chapters). */
+  unlockAll = false,
+): Map<string, LevelState> {
   const out = new Map<string, LevelState>();
   let previousSolved = true;
   for (const ch of catalog.chapters) {
     for (const level of chapterLevels(catalog, ch)) {
       const s = stars(level.id);
-      out.set(level.id, s > 0 ? 'done' : previousSolved && ch.free ? 'open' : 'locked');
+      out.set(level.id, s > 0 ? 'done' : unlockAll || (previousSolved && ch.free) ? 'open' : 'locked');
       previousSolved = s > 0;
     }
   }

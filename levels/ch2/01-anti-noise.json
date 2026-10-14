@@ -1,0 +1,53 @@
+{
+  "chapter": 2,
+  "id": "2-1",
+  "name": "Anti-Noise",
+  "description": "A machine hums at 3 Hz. Sound is a wave, so a second wave of the same pitch, turned upside down, cancels it. Place the emitter between the machine and the quiet zone, then tune it.",
+  "hint": "Flip the emitter's phase until the zone goes dark, then trim its strength. The emitter is closer to the zone than the machine, so it needs less.",
+  "grid": {
+    "width": 256,
+    "height": 160
+  },
+  "medium": {
+    "c": 60,
+    "damping": 0.02
+  },
+  "sources": [
+    {
+      "kind": "point",
+      "pos": [
+        30,
+        80
+      ],
+      "freq": 3
+    }
+  ],
+  "goals": [
+    {
+      "kind": "silence",
+      "pos": [
+        190,
+        80
+      ],
+      "radius": 8,
+      "threshold": 0.05,
+      "hold": 3
+    }
+  ],
+  "inventory": {
+    "emitter": {
+      "count": 1,
+      "cost": 1,
+      "tune": [
+        "phase",
+        "amp"
+      ]
+    }
+  },
+  "budget": 1,
+  "par": {
+    "cost": 1,
+    "energy": 40
+  },
+  "timeLimit": 25
+}

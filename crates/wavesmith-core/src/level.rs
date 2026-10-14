@@ -27,7 +27,7 @@ pub struct Medium {
     pub light: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InventoryEntry {
     pub count: u32,
@@ -38,6 +38,54 @@ pub struct InventoryEntry {
     /// Material for new glass pieces (prisms, slabs, and glass lenses).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub material: Option<crate::light::Material>,
+    /// Starting frequency of new emitters and resonators (default: the first source's).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub freq: Option<f32>,
+    /// Settings the player may change on emitters and resonators. Anything not listed stays
+    /// at its starting value. By default emitters tune frequency and phase, resonators
+    /// frequency.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tune: Option<Vec<Tune>>,
+    /// Rectangle `[x0, y0, x1, y1]` the piece's handles must stay inside.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub area: Option<[f32; 4]>,
+}
+
+/// A setting on a tunable piece.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Tune {
+    Freq,
+    Phase,
+    /// Emitter strength.
+    Amp,
+    /// Emitter velocity: speed and heading.
+    Speed,
+}
+
+impl InventoryEntry {
+    /// Whether `t` may be changed on pieces of `kind`.
+    pub fn tunes(&self, kind: ToolKind, t: Tune) -> bool {
+        match &self.tune {
+            Some(list) => list.contains(&t),
+            None => match kind {
+                ToolKind::Emitter => matches!(t, Tune::Freq | Tune::Phase),
+                ToolKind::Resonator => t == Tune::Freq,
+                _ => false,
+            },
+        }
+    }
+}
+
+/// How the board is drawn: purely visual, ignored by the solver.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Display {
+    /// Brightness multiplier for the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gain: Option<f32>,
+    /// Color scheme: `"sound"` (default for sound levels) or `"water"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palette: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -60,6 +108,8 @@ pub struct Level {
     pub hint: String,
     pub grid: GridSize,
     pub medium: Medium,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display: Option<Display>,
     pub sources: Vec<SourceDef>,
     #[serde(default)]
     pub fixed: Vec<Item>,
@@ -75,12 +125,31 @@ pub struct Level {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlacementError {
     NotInInventory(ToolKind),
-    TooMany { kind: ToolKind, max: u32 },
-    OverBudget { cost: u32, budget: u32 },
+    TooMany {
+        kind: ToolKind,
+        max: u32,
+    },
+    OverBudget {
+        cost: u32,
+        budget: u32,
+    },
     OutOfBounds(usize),
-    TooBig { index: usize, max: f32 },
+    /// Outside the area the level allows for that piece.
+    OutsideArea(usize),
+    TooBig {
+        index: usize,
+        max: f32,
+    },
     Shape(usize, String),
-    Covers { index: usize, what: &'static str },
+    Covers {
+        index: usize,
+        what: &'static str,
+    },
+    /// A setting the level fixes was changed.
+    Locked {
+        index: usize,
+        what: &'static str,
+    },
 }
 
 impl std::fmt::Display for PlacementError {
@@ -92,11 +161,17 @@ impl std::fmt::Display for PlacementError {
                 write!(f, "cost {cost} is over the budget of {budget}")
             }
             PlacementError::OutOfBounds(i) => write!(f, "piece {i} is outside the play area"),
+            PlacementError::OutsideArea(i) => {
+                write!(f, "piece {i} is outside the area allowed for it")
+            }
             PlacementError::TooBig { index, max } => {
                 write!(f, "piece {index} is larger than {max} cells")
             }
             PlacementError::Shape(i, m) => write!(f, "piece {i}: {m}"),
             PlacementError::Covers { index, what } => write!(f, "piece {index} covers a {what}"),
+            PlacementError::Locked { index, what } => {
+                write!(f, "piece {index}: this level fixes its {what}")
+            }
         }
     }
 }
@@ -110,7 +185,7 @@ const GOAL_CLEARANCE: f32 = 1.0;
 
 impl Level {
     pub fn from_json(s: &str) -> Result<Level, String> {
-        let level: Level = serde_json::from_str(s).map_err(|e| format!("level JSON: {e}"))?;
+        let level: Level = crate::json::parse(s).map_err(|e| format!("level JSON: {e}"))?;
         level.validate()?;
         Ok(level)
     }
@@ -146,8 +221,9 @@ impl Level {
         if !(self.medium.damping >= 0.0 && self.medium.damping < 50.0) {
             return Err(ctx("medium damping out of range".into()));
         }
-        if self.sources.is_empty() {
-            return Err(ctx("at least one source is required".into()));
+        // Levels may leave all the sound to the player's emitters.
+        if self.sources.is_empty() && !self.inventory.contains_key(&ToolKind::Emitter) {
+            return Err(ctx("a level needs a source or an emitter to place".into()));
         }
         for (i, s) in self.sources.iter().enumerate() {
             s.check(self.medium.light)
@@ -182,6 +258,48 @@ impl Level {
         Ok(())
     }
 
+    /// Starting frequency for new emitters and resonators of an inventory entry.
+    pub fn default_freq(&self, entry: &InventoryEntry) -> f32 {
+        entry
+            .freq
+            .unwrap_or_else(|| self.sources.first().map_or(3.0, |s| s.freq()))
+    }
+
+    /// Rejects changes to settings the level keeps fixed.
+    fn check_tuning(
+        &self,
+        index: usize,
+        item: &Item,
+        entry: &InventoryEntry,
+    ) -> Result<(), PlacementError> {
+        let kind = item.kind();
+        let same = |a: f32, b: f32| (a - b).abs() <= 1e-3;
+        let locked = |t: Tune, ok: bool, what: &'static str| {
+            if entry.tunes(kind, t) || ok {
+                Ok(())
+            } else {
+                Err(PlacementError::Locked { index, what })
+            }
+        };
+        let f0 = self.default_freq(entry);
+        match *item {
+            Item::Emitter {
+                freq,
+                amp,
+                phase,
+                vel,
+                ..
+            } => {
+                locked(Tune::Freq, same(freq, f0), "frequency")?;
+                locked(Tune::Phase, same(phase, 0.0), "phase")?;
+                locked(Tune::Amp, same(amp, 1.0), "strength")?;
+                locked(Tune::Speed, vel == [0.0, 0.0], "motion")
+            }
+            Item::Resonator { freq, .. } => locked(Tune::Freq, same(freq, f0), "tuning"),
+            _ => Ok(()),
+        }
+    }
+
     /// Validates the player's pieces against inventory, budget, bounds, and keep-out zones.
     /// Returns the total part cost.
     pub fn check_placements(&self, items: &[Item]) -> Result<u32, PlacementError> {
@@ -209,8 +327,15 @@ impl Level {
                     return Err(PlacementError::TooBig { index: i, max });
                 }
             }
+            self.check_tuning(i, item, entry)?;
             if !item.control_points().iter().all(|&p| self.inside(p)) {
                 return Err(PlacementError::OutOfBounds(i));
+            }
+            if let Some([x0, y0, x1, y1]) = entry.area {
+                let ok = |p: &V2| p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
+                if !item.control_points().iter().all(ok) {
+                    return Err(PlacementError::OutsideArea(i));
+                }
             }
             if item.is_obstacle() {
                 for s in &self.sources {

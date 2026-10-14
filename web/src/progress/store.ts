@@ -3,9 +3,39 @@
 
 const KEY = 'wavesmith.progress.v1';
 
+/** Light-level color mapping: the physical red/green/blue, or one that stays distinct for
+ * the common forms of color blindness. */
+export type Palette = 'standard' | 'colorblind';
+
+export interface Settings {
+  muted: boolean;
+  /** Master volume, 0..1. */
+  volume: number;
+  haptics: boolean;
+  /** Calmer visuals; `null` follows the system's reduced-motion setting. */
+  reducedMotion: boolean | null;
+  palette: Palette;
+  /** Frame rate and solver timing over the board (P in a level). */
+  perfStats: boolean;
+  /** The Chapter 1 walkthrough has been shown. */
+  tutorialSeen: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  muted: false,
+  volume: 0.9,
+  haptics: true,
+  reducedMotion: null,
+  palette: 'standard',
+  perfStats: false,
+  tutorialSeen: false,
+};
+
 export interface Progress {
   stars: Record<string, number>;
   /** Player settings that should survive reloads. */
+  settings?: Partial<Settings>;
+  /** Older saves kept these two at the top level. */
   muted?: boolean;
   haptics?: boolean;
 }
@@ -65,12 +95,38 @@ export class ProgressStore {
     return true;
   }
 
-  get settings(): { muted: boolean; haptics: boolean } {
-    return { muted: this.data.muted ?? false, haptics: this.data.haptics ?? true };
+  get settings(): Settings {
+    const legacy: Partial<Settings> = {};
+    if (this.data.muted !== undefined) legacy.muted = this.data.muted;
+    if (this.data.haptics !== undefined) legacy.haptics = this.data.haptics;
+    return { ...DEFAULT_SETTINGS, ...legacy, ...this.data.settings };
   }
 
-  setSetting(name: 'muted' | 'haptics', value: boolean): void {
-    this.data[name] = value;
+  setSetting<K extends keyof Settings>(name: K, value: Settings[K]): void {
+    this.data.settings = { ...this.data.settings, [name]: value };
+    this.write();
+  }
+
+  /** Forgets every star (settings stay). */
+  resetProgress(): void {
+    this.data.stars = {};
+    this.write();
+  }
+
+  /** The whole save, for moving it to native storage or a cloud save. */
+  snapshot(): Progress {
+    return JSON.parse(JSON.stringify(this.data)) as Progress;
+  }
+
+  /**
+   * Merges another save (native storage, cloud save) into this one, keeping the best stars
+   * per level. Settings from `other` fill in only what this save hasn't set.
+   */
+  merge(other: Progress): void {
+    for (const [id, n] of Object.entries(other.stars ?? {})) {
+      if (typeof n === 'number' && n > this.stars(id)) this.data.stars[id] = Math.min(3, Math.floor(n));
+    }
+    this.data.settings = { ...other.settings, ...this.data.settings };
     this.write();
   }
 
