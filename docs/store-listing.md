@@ -47,8 +47,15 @@ Category: Puzzle. Tags: Logic, Brain games, Science, Relaxing, Offline.
 
 ## Contact and privacy
 
-Email: (your support address). Privacy policy URL: (required by Play; the game itself
-collects no personal data).
+| Field | Value |
+| --- | --- |
+| Email | support@cuplex.se |
+| Website | https://cuplexuser.github.io/Wavesmith/features/ |
+| Privacy policy | https://cuplexuser.github.io/Wavesmith/privacy/ |
+
+Both pages are `web/features/index.html` and `web/privacy/index.html`, published with the web
+demo by the Pages workflow. The policy says what the code does today (no data collected; Play
+Games and billing are Google's), so update it, and its effective date, when that changes.
 
 ## Graphics
 

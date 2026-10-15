@@ -2,6 +2,7 @@
 // Opens over any screen; changes apply immediately and persist.
 
 import type { App } from '../app';
+import { PRIVACY_URL } from '../links';
 import { appVersion } from '../platform/native';
 import type { Settings } from '../progress/store';
 import { h } from './dom';
@@ -203,9 +204,15 @@ export function openSettings(app: App, opts: { onTutorial?: () => void } = {}): 
       resetBtn,
     ),
   );
-  // In the Android app, the version shows at the bottom, to match a phone to a Play release.
+  // The privacy policy link, and in the Android app the version, to match a phone to a Play release.
+  const foot = h(
+    'p',
+    { class: 'settings-foot' },
+    h('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, 'Privacy policy'),
+  );
+  card.append(foot);
   void appVersion().then((v) => {
-    if (v) card.append(h('p', { class: 'settings-version' }, `Wavesmith ${v}`));
+    if (v) foot.prepend(h('span', {}, `Wavesmith ${v}`));
   });
   layer.append(card);
   layer.addEventListener('pointerdown', (e) => {

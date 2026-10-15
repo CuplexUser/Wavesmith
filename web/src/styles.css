@@ -1,30 +1,7 @@
 /* Wavesmith: an instrument-panel look. Deep ink background, warm crests, cool troughs,
    mint for the player's pieces. */
 
-:root {
-  --ink: #070b14;
-  --ink-2: #0c1322;
-  --ink-3: #131c30;
-  --line: rgba(160, 186, 230, 0.14);
-  --line-strong: rgba(160, 186, 230, 0.28);
-  --text: #e8eefb;
-  --text-dim: #93a1bd;
-  --text-faint: #7d8aa6;
-  --warm: #ffb357;
-  --warm-hot: #ffd9a0;
-  --cool: #7cc8ff;
-  --mint: #5ef2c2;
-  --danger: #ff5d73;
-  --done: #a8ffbf;
-  --radius: 10px;
-  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
-  --safe-l: env(safe-area-inset-left, 0px);
-  --safe-r: env(safe-area-inset-right, 0px);
-  --safe-t: env(safe-area-inset-top, 0px);
-  --safe-b: env(safe-area-inset-bottom, 0px);
-  color-scheme: dark;
-}
+@import './tokens.css';
 
 * {
   box-sizing: border-box;
@@ -1159,12 +1136,18 @@ button {
   flex-wrap: wrap;
   gap: 10px;
 }
-.settings-version {
+.settings-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
   margin: 18px 0 0;
   color: var(--text-faint);
   font-family: var(--mono);
   font-size: 12px;
-  text-align: center;
+}
+.settings-foot a {
+  color: var(--text-dim);
 }
 .btn.danger {
   border-color: rgba(255, 93, 115, 0.5);

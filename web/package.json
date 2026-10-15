@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "android": "node ../scripts/build-wasm.mjs --if-stale && tsc --noEmit && vite build --base ./ && cap sync android",
+    "android": "node ../scripts/build-wasm.mjs --if-stale && tsc --noEmit && vite build --base ./ --mode native && cap sync android",
     "android:open": "cap open android",
     "android:run": "pnpm android && cap run android",
     "android:release": "node ../scripts/android-release.mjs"

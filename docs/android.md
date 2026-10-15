@@ -97,8 +97,8 @@ Play rejects a bundle whose version code it has already seen.
 2. Fill in the store listing from `docs/store-listing.md`; upload `docs/store/*.jpg`
    (screenshots), `docs/store/feature-graphic.jpg`, and `web/assets/icon-only.png` resized to
    512×512 for the hi-res icon.
-3. App content: privacy policy (the game collects nothing itself; Play Games and billing are
-   Google's), ads: none, content rating questionnaire, target audience, data safety (no data
+3. App content: privacy policy `https://cuplexuser.github.io/Wavesmith/privacy/` (the game
+   collects nothing itself; Play Games and billing are Google's; Settings links to it), ads: none, content rating questionnaire, target audience, data safety (no data
    collected or shared by the app).
 4. Upload the signed AAB to *Internal testing* (Testing → Internal testing → Create release).
    Play needs one upload before in-app products work. Later builds go up the same way, or to
