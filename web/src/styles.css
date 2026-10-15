@@ -1159,6 +1159,13 @@ button {
   flex-wrap: wrap;
   gap: 10px;
 }
+.settings-version {
+  margin: 18px 0 0;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: center;
+}
 .btn.danger {
   border-color: rgba(255, 93, 115, 0.5);
   color: #ffb3bf;

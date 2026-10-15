@@ -48,6 +48,7 @@ pnpm test        # Vitest
 pnpm build       # type check + production build into web/dist (base /wavesmith/)
 pnpm preview     # serve the production build
 pnpm android     # web build + `cap sync` into web/android (then `pnpm android:open`)
+pnpm android:release   # signed .aab for Google Play (see docs/android.md)
 ```
 
 Development builds (`pnpm dev`) open every chapter; production builds keep paid chapters

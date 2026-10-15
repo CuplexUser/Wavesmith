@@ -2,6 +2,7 @@
 // Opens over any screen; changes apply immediately and persist.
 
 import type { App } from '../app';
+import { appVersion } from '../platform/native';
 import type { Settings } from '../progress/store';
 import { h } from './dom';
 import { ICONS } from './icons';
@@ -202,6 +203,10 @@ export function openSettings(app: App, opts: { onTutorial?: () => void } = {}): 
       resetBtn,
     ),
   );
+  // In the Android app, the version shows at the bottom, to match a phone to a Play release.
+  void appVersion().then((v) => {
+    if (v) card.append(h('p', { class: 'settings-version' }, `Wavesmith ${v}`));
+  });
   layer.append(card);
   layer.addEventListener('pointerdown', (e) => {
     if (e.target === layer) close();

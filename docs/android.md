@@ -40,6 +40,7 @@ pnpm wasm
 pnpm android          # typecheck, Vite build with relative paths, cap sync into web/android
 pnpm android:open     # open the project in Android Studio; Run ▶ on a phone or emulator
 pnpm android:run      # build, sync and run on a connected device or emulator
+pnpm android:release  # signed release bundle for Play (needs keystore.properties, see 3.)
 ```
 
 Run `pnpm android` after every web or core change before building in Android Studio.
@@ -82,8 +83,9 @@ Then make a release bundle either way:
   keyPassword=...
   ```
 
-  `storeFile` is absolute or relative to `web/android/app`. Then
-  `cd web/android && ./gradlew bundleRelease` writes `app/build/outputs/bundle/release/app-release.aab`.
+  `storeFile` is absolute or relative to `web/android/app` (use forward slashes). Then, from
+  `web`, `pnpm android:release` checks the key setup, runs `pnpm android` and
+  `gradlew bundleRelease`, and prints where `app-release.aab` landed.
 
 Before each upload, raise `versionCode` (and `versionName`) in `web/android/app/build.gradle`;
 Play rejects a bundle whose version code it has already seen.

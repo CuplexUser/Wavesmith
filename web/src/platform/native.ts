@@ -82,6 +82,21 @@ function safeGet(s: StorageLike | null, key: string): string | null {
   }
 }
 
+/**
+ * The installed app's version as "0.1.0 (1)": versionName and versionCode from
+ * android/app/build.gradle, read back from the APK. Null on the web, which has no release number.
+ */
+export async function appVersion(): Promise<string | null> {
+  if (!isNative()) return null;
+  try {
+    const { App } = await import('@capacitor/app');
+    const { version, build } = await App.getInfo();
+    return `${version} (${build})`;
+  } catch {
+    return null;
+  }
+}
+
 export interface Lifecycle {
   /** The app went to the background (false) or came back (true). */
   onActive(fn: (active: boolean) => void): void;
