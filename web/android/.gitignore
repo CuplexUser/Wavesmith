@@ -40,17 +40,9 @@ captures/
 
 # IntelliJ
 *.iml
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/gradle.xml
-.idea/assetWizardSettings.xml
-.idea/dictionaries
-.idea/libraries
-# Android Studio 3 in .gitignore file.
-.idea/caches
-.idea/modules.xml
-# Comment next line if keeping position of elements in Navigation Editor is relevant for you
-.idea/navEditor.xml
+# Android Studio writes its per-machine settings here (chosen JDK, device, run configurations);
+# the Gradle files are the project's only build configuration.
+.idea/
 
 # Keystore files
 # The upload key and its passwords never go in git (see docs/android.md).

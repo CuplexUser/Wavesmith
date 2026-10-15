@@ -36,8 +36,11 @@ android {
     buildTypes {
         release {
             if (keystorePropsFile.exists()) signingConfig = signingConfigs.release
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // R8 shrinks and optimizes the Java side; Capacitor and the Play libraries bring their own
+            // keep rules, which also cover BillingPlugin and PlayGamesPlugin.
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
