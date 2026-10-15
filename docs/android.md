@@ -30,7 +30,8 @@ workflow's `packageName`. It can never change once the app is uploaded to Play.
 
 ## 2. Build locally (optional)
 
-Install Android Studio (it brings the SDK and JDK 21), then:
+Install Android Studio (it brings the SDK and a JDK; Gradle 9.1+ runs on JDK 21 through 25),
+then:
 
 ```sh
 cd web
@@ -39,6 +40,15 @@ pnpm wasm
 pnpm build:native     # typecheck, Vite build with relative paths, cap sync
 pnpm android          # opens Android Studio; Run ▶ on a phone or emulator
 ```
+
+To build from the command line instead, point Gradle at the SDK once, either with `ANDROID_HOME`
+or with an untracked `web/android/local.properties` (Android Studio writes it on first open):
+
+```properties
+sdk.dir=C:/Users/<you>/AppData/Local/Android/Sdk
+```
+
+Then `cd web/android && ./gradlew assembleDebug` writes `app/build/outputs/apk/debug/app-debug.apk`.
 
 Debug builds work without any of the steps below. Play Games stays off and the purchase
 button reports the store as unavailable until the Play Console parts exist.
