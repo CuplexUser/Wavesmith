@@ -10,8 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build:native": "node ../scripts/build-wasm.mjs --if-stale && tsc --noEmit && vite build --base ./ && cap sync android",
-    "android": "cap open android"
+    "android": "node ../scripts/build-wasm.mjs --if-stale && tsc --noEmit && vite build --base ./ && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "pnpm android && cap run android"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.3",

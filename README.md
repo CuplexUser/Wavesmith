@@ -47,7 +47,7 @@ pnpm dev         # http://localhost:5173 (rebuilds the core first if the Rust so
 pnpm test        # Vitest
 pnpm build       # type check + production build into web/dist (base /wavesmith/)
 pnpm preview     # serve the production build
-pnpm build:native   # web build + `cap sync` into web/android (then `pnpm android`)
+pnpm android     # web build + `cap sync` into web/android (then `pnpm android:open`)
 ```
 
 Development builds (`pnpm dev`) open every chapter; production builds keep paid chapters

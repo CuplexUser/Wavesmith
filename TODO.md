@@ -105,8 +105,8 @@ P2
       **(you)** set up Play Games, paste the project ID and achievement IDs
 - [x] App icon, splash screen, store listing draft, screenshots; trailer capture script
       (**(you)** record on a machine with a GPU and upload to YouTube)
-- [~] Release pipeline: debug APK on every push and signed AAB in GitHub Actions, upload to
-      the internal track; **(you)** add the signing and Play secrets
+- [~] Release pipeline: manual local builds, signed AAB from `keystore.properties` or Android
+      Studio, uploaded to Play by hand; **(you)** create the upload key
 
 ## M6 · Launch and after
 

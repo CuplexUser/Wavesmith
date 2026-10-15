@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+// The upload key's location and passwords live in android/keystore.properties, which stays out
+// of git (see docs/android.md). Without it, release builds are left unsigned.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) { keystorePropsFile.withInputStream { keystoreProps.load(it) } }
+
 android {
     namespace = "se.cuplex.wavesmith"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,9 +13,9 @@ android {
         applicationId "se.cuplex.wavesmith"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // CI passes the run number so every upload to Play gets a higher code.
-        versionCode((System.getenv("WAVESMITH_VERSION_CODE") ?: "1") as int)
-        versionName System.getenv("WAVESMITH_VERSION_NAME") ?: "0.1.0"
+        // Raise versionCode before every upload to Play; it must be higher than the last one.
+        versionCode 1
+        versionName "0.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,22 +23,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // Release signing reads the upload key from the environment (see docs/android.md); without
-    // it, release builds are left unsigned and debug builds use the usual debug key.
     signingConfigs {
         release {
-            def store = System.getenv("WAVESMITH_KEYSTORE")
-            if (store) {
-                storeFile file(store)
-                storePassword System.getenv("WAVESMITH_KEYSTORE_PASSWORD")
-                keyAlias System.getenv("WAVESMITH_KEY_ALIAS")
-                keyPassword System.getenv("WAVESMITH_KEY_PASSWORD")
+            if (keystorePropsFile.exists()) {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
             }
         }
     }
     buildTypes {
         release {
-            if (System.getenv("WAVESMITH_KEYSTORE")) signingConfig signingConfigs.release
+            if (keystorePropsFile.exists()) signingConfig = signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

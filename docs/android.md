@@ -2,8 +2,8 @@
 
 The Android app is the Vite build wrapped with Capacitor (`web/android`). Everything that can
 be prepared in the repository is done; this guide lists what needs your Google accounts, in
-order. CI (`.github/workflows/android.yml`) already builds a debug APK on every push, so the
-native code is known to compile.
+order. Android builds are made by hand on your machine and uploaded to Play by hand; no CI
+workflow builds, signs or uploads the app.
 
 ## What is in place
 
@@ -19,16 +19,16 @@ native code is known to compile.
 | App icon (adaptive), splash screen | `web/assets/`, `android/app/src/main/res/` | Done |
 | Store screenshots, feature graphic | `docs/store/` | Done (retake any time) |
 | Trailer capture | `scripts/capture-trailer.mjs` | Script ready |
-| Signed AAB in GitHub Actions, internal track upload | `.github/workflows/android.yml` | Needs secrets |
+| Signed release AAB, built locally | `web/android/app/build.gradle`, `keystore.properties` | Needs the upload key |
 | Web demo linking to the store | Level select banner, `PLAY_STORE_URL` in `store.ts` | Update the URL when live |
 
 ## 1. Package name
 
 The app is `se.cuplex.wavesmith`, set in `web/capacitor.config.ts`, `web/android/app/build.gradle`
-(`namespace`, `applicationId`), `res/values/strings.xml`, the Java package folder, and the
-workflow's `packageName`. It can never change once the app is uploaded to Play.
+(`namespace`, `applicationId`), `res/values/strings.xml`, and the Java package folder. It can
+never change once the app is uploaded to Play.
 
-## 2. Build locally (optional)
+## 2. Build and run
 
 Install Android Studio (it brings the SDK and a JDK; Gradle 9.1+ runs on JDK 21 through 25),
 then:
@@ -37,9 +37,12 @@ then:
 cd web
 pnpm install
 pnpm wasm
-pnpm build:native     # typecheck, Vite build with relative paths, cap sync
-pnpm android          # opens Android Studio; Run ▶ on a phone or emulator
+pnpm android          # typecheck, Vite build with relative paths, cap sync into web/android
+pnpm android:open     # open the project in Android Studio; Run ▶ on a phone or emulator
+pnpm android:run      # build, sync and run on a connected device or emulator
 ```
+
+Run `pnpm android` after every web or core change before building in Android Studio.
 
 To build from the command line instead, point Gradle at the SDK once, either with `ANDROID_HOME`
 or with an untracked `web/android/local.properties` (Android Studio writes it on first open):
@@ -53,29 +56,37 @@ Then `cd web/android && ./gradlew assembleDebug` writes `app/build/outputs/apk/d
 Debug builds work without any of the steps below. Play Games stays off and the purchase
 button reports the store as unavailable until the Play Console parts exist.
 
-## 3. Create the upload key and GitHub secrets
+## 3. Sign a release build
+
+Create the upload key once, in Android Studio (**Build → Generate Signed App Bundle → Create
+new**) or with `keytool`:
 
 ```sh
 keytool -genkeypair -v -keystore wavesmith-upload.jks -alias upload \
   -keyalg RSA -keysize 4096 -validity 10000
-base64 -w0 wavesmith-upload.jks > wavesmith-upload.jks.b64
 ```
 
-Keep the `.jks` and its passwords somewhere safe (a password manager), never in the
+Keep the key file and its passwords somewhere safe (a password manager), never in the
 repository. Use Play App Signing (the default): Google holds the app signing key and this is
 only the upload key, which Google can reset if you lose it.
 
-In GitHub → Settings → Secrets and variables → Actions, add:
+Then make a release bundle either way:
 
-| Secret | Value |
-| --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | contents of `wavesmith-upload.jks.b64` |
-| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
-| `ANDROID_KEY_ALIAS` | `upload` |
-| `ANDROID_KEY_PASSWORD` | the key password |
+- **Android Studio:** Build → Generate Signed App Bundle, pick the key, choose *release*.
+- **Command line:** create `web/android/keystore.properties` (gitignored, like the key itself):
 
-From then on every push also builds a signed `app-release.aab` (an Actions artifact). The
-version code is the workflow run number, so each build can be uploaded.
+  ```properties
+  storeFile=C:/path/to/wavesmith-upload.jks
+  storePassword=...
+  keyAlias=upload
+  keyPassword=...
+  ```
+
+  `storeFile` is absolute or relative to `web/android/app`. Then
+  `cd web/android && ./gradlew bundleRelease` writes `app/build/outputs/bundle/release/app-release.aab`.
+
+Before each upload, raise `versionCode` (and `versionName`) in `web/android/app/build.gradle`;
+Play rejects a bundle whose version code it has already seen.
 
 ## 4. Create the app in the Play Console
 
@@ -87,8 +98,9 @@ version code is the workflow run number, so each build can be uploaded.
 3. App content: privacy policy (the game collects nothing itself; Play Games and billing are
    Google's), ads: none, content rating questionnaire, target audience, data safety (no data
    collected or shared by the app).
-4. Upload the first signed AAB by hand to *Internal testing* (Testing → Internal testing →
-   Create release). Play needs one upload before the API and in-app products work.
+4. Upload the signed AAB to *Internal testing* (Testing → Internal testing → Create release).
+   Play needs one upload before in-app products work. Later builds go up the same way, or to
+   closed testing and production when you are ready.
 
 ## 5. The full-game purchase
 
@@ -129,15 +141,7 @@ Which chapters are free is set per chapter by `"free"` in `levels/chapters.json`
 
 Without the project ID the plugin stays off and the game behaves exactly as before.
 
-## 7. Upload from CI
-
-1. Google Cloud → create a service account; Play Console → Users and permissions → invite it
-   with *Release to testing tracks*.
-2. Create a JSON key for it and store it as the `PLAY_SERVICE_ACCOUNT_JSON` secret.
-3. Actions → Android → Run workflow → tick *Upload* to publish the build to the internal
-   track.
-
-## 8. Before the "web is good enough" gate passes
+## 7. Before the "web is good enough" gate passes
 
 The roadmap's gate still needs real devices: 60 fps on a mid-range Android phone, touch and
 haptics checked by hand, and outside playtesters. Turn on *Performance stats* in Settings (or
