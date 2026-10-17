@@ -1,6 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { buildCatalog, type ChapterDef } from '../src/levels';
-import { earnedAchievements } from '../src/platform/games';
+import { ACHIEVEMENTS, earnedAchievements, totalStars } from '../src/platform/games';
 import type { Level } from '../src/types';
 
 const lvl = (id: string): Level => ({
@@ -45,5 +46,21 @@ describe('achievements', () => {
       'chapter-2-stars',
       'all-stars',
     ]);
+  });
+});
+
+describe('game-ids.xml', () => {
+  const xml = readFileSync(new URL('../android/app/src/main/res/values/game-ids.xml', import.meta.url), 'utf8');
+
+  it('has an ID for every achievement the game unlocks', () => {
+    for (const name of Object.values(ACHIEVEMENTS)) expect(xml).toContain(`name="achievement_${name}"`);
+  });
+});
+
+describe('leaderboards', () => {
+  it('totals stars across every chapter', () => {
+    expect(totalStars(catalog, () => 0)).toBe(0);
+    const stars: Record<string, number> = { '1-1': 3, '1-2': 1, '2-1': 2 };
+    expect(totalStars(catalog, (id) => stars[id] ?? 0)).toBe(6);
   });
 });

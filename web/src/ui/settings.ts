@@ -10,26 +10,30 @@ import { ICONS } from './icons';
 
 type Choice<T> = { value: T; label: string };
 
-/** Play Games sign-in and achievements. */
+/** Play Games sign-in, achievements, and leaderboards. */
 function playGamesRow(app: App): HTMLElement {
   const row = h('div', { class: 'setting-actions' });
   const render = async () => {
-    const signedIn = await app.games.signedIn();
+    if (await app.games.signedIn()) {
+      row.replaceChildren(
+        h('button', { class: 'btn small', type: 'button', onclick: () => void app.games.showAchievements() }, 'Achievements'),
+        h('button', { class: 'btn small', type: 'button', onclick: () => void app.games.showLeaderboards() }, 'Leaderboards'),
+      );
+      return;
+    }
     row.replaceChildren(
-      signedIn
-        ? h('button', { class: 'btn small', type: 'button', onclick: () => void app.games.showAchievements() }, 'Achievements')
-        : h(
-            'button',
-            {
-              class: 'btn small',
-              type: 'button',
-              onclick: async () => {
-                if (await app.games.signIn()) await app.syncAccounts();
-                void render();
-              },
-            },
-            'Sign in to Play Games',
-          ),
+      h(
+        'button',
+        {
+          class: 'btn small',
+          type: 'button',
+          onclick: async () => {
+            if (await app.games.signIn()) await app.syncAccounts();
+            void render();
+          },
+        },
+        'Sign in to Play Games',
+      ),
     );
   };
   void render();

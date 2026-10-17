@@ -15,7 +15,7 @@ workflow builds, signs or uploads the app.
 | Android back button (dialog → screen → exit) | `App.back()` in `web/src/app.ts` | Done |
 | Progress in native preferences, localStorage mirror | `createStorage` in `native.ts` | Done |
 | One-time purchase that unlocks the full game | `BillingPlugin.java`, `web/src/platform/store.ts` | Needs the Play product |
-| Play Games: sign-in, achievements, cloud save | `PlayGamesPlugin.java`, `web/src/platform/games.ts` | Needs Play Games setup |
+| Play Games: sign-in, achievements, leaderboards, cloud save | `PlayGamesPlugin.java`, `web/src/platform/games.ts`, `res/values/game-ids.xml` | Needs Play Games setup |
 | App icon (adaptive), splash screen | `web/assets/`, `android/app/src/main/res/` | Done |
 | Store screenshots, feature graphic | `docs/store/` | Done (retake any time) |
 | Trailer capture | `scripts/capture-trailer.mjs` | Script ready |
@@ -122,9 +122,14 @@ Which chapters are free is set per chapter by `"free"` in `levels/chapters.json`
 2. Credentials → create an Android OAuth credential with the package name and the **SHA-1 of
    the app signing key** (Play Console → Setup → App signing) and, for local debug builds, the
    SHA-1 of your debug key (`./gradlew signingReport`).
-3. Copy the **project ID** (Configuration → Properties) into
-   `web/android/app/src/main/res/values/games.xml`.
-4. Achievements → create these (IDs go into `ACHIEVEMENT_IDS` in `web/src/platform/games.ts`):
+3. Create the achievements and leaderboards below, then paste the console's export
+   (Achievements or Leaderboards → *Get resources* → Android) over
+   `web/android/app/src/main/res/values/game-ids.xml`. It carries the project ID (`app_id`)
+   and every ID. The console names each entry after its title (*First Ripple* becomes
+   `achievement_first_ripple`), so the titles must match the **Name** columns exactly; the game
+   finds them through `ACHIEVEMENTS` and `LEADERBOARDS` in `web/src/platform/games.ts`, and
+   `test/games.test.ts` fails if an achievement is missing from the file.
+4. Achievements → create these:
 
    | Key | Name | Description |
    | --- | --- | --- |
@@ -138,10 +143,19 @@ Which chapters are free is set per chapter by `"free"` in `levels/chapters.json`
    | `chapter-N-stars` | (Chapter) Mastered | Earn all three stars on every level of chapter N. |
    | `all-stars` | Wavesmith | Earn every star in the game. |
 
-5. Turn on *Saved games* (Configuration) for the cloud save.
-6. Add testers (Configuration → Testers) until Play Games is published.
+5. Leaderboards → create this one, with the icon `leaderboard-icon-512.png`, then export
+   again so `leaderboard_total_stars` lands in `game-ids.xml`:
 
-Without the project ID the plugin stays off and the game behaves exactly as before.
+   | Name | Format | Order | Limits |
+   | --- | --- | --- | --- |
+   | Total Stars | Numeric, no decimals | Larger is better | 0 to 3 × the number of levels (84 for 28 levels) |
+
+   The game submits the player's star total whenever it goes up and at sign-in. Settings shows
+   a *Leaderboards* button next to *Achievements* once the player is signed in.
+6. Turn on *Saved games* (Configuration) for the cloud save.
+7. Add testers (Configuration → Testers) until Play Games is published.
+
+Without `app_id` in `game-ids.xml` the build fails, because the manifest refers to it.
 
 ## 7. Before the "web is good enough" gate passes
 

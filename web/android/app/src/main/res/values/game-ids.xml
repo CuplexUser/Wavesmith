@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--Google Play game services IDs. Save this file as res/values/games-ids.xml in your project.-->
+<resources>
+  <!--app_id-->
+  <string name="app_id" translatable="false">162463323512</string>  
+  <!--achievement First Ripple-->
+  <string name="achievement_first_ripple" translatable="false">CgkI-KrGnN0EEAIQBg</string>
+  <!--achievement Reflection-->
+  <string name="achievement_reflection" translatable="false">CgkI-KrGnN0EEAIQBQ</string>
+  <!--achievement Interference-->
+  <string name="achievement_interference" translatable="false">CgkI-KrGnN0EEAIQBA</string>
+  <!--achievement Resonance-->
+  <string name="achievement_resonance" translatable="false">CgkI-KrGnN0EEAIQCw</string>
+  <!--achievement Refraction-->
+  <string name="achievement_refraction" translatable="false">CgkI-KrGnN0EEAIQAw</string>
+  <!--achievement Light-->
+  <string name="achievement_light" translatable="false">CgkI-KrGnN0EEAIQBw</string>
+  <!--achievement Doppler-->
+  <string name="achievement_doppler" translatable="false">CgkI-KrGnN0EEAIQDQ</string>
+  <!--achievement Reflection Mastered-->
+  <string name="achievement_reflection_mastered" translatable="false">CgkI-KrGnN0EEAIQAQ</string>
+  <!--achievement Interference Mastered-->
+  <string name="achievement_interference_mastered" translatable="false">CgkI-KrGnN0EEAIQCA</string>
+  <!--achievement Resonance Mastered-->
+  <string name="achievement_resonance_mastered" translatable="false">CgkI-KrGnN0EEAIQDA</string>
+  <!--achievement Refraction Mastered-->
+  <string name="achievement_refraction_mastered" translatable="false">CgkI-KrGnN0EEAIQCg</string>
+  <!--achievement Light Mastered-->
+  <string name="achievement_light_mastered" translatable="false">CgkI-KrGnN0EEAIQCQ</string>
+  <!--achievement Doppler Mastered-->
+  <string name="achievement_doppler_mastered" translatable="false">CgkI-KrGnN0EEAIQAg</string>
+  <!--achievement Wavesmith-->
+  <string name="achievement_wavesmith" translatable="false">CgkI-KrGnN0EEAIQDg</string>
+  <!--leaderboard Total Stars-->
+  <string name="leaderboard_total_stars" translatable="false">CgkI-KrGnN0EEAIQDw</string>
+  <!--leaderboard Perfect Levels-->
+  <string name="leaderboard_perfect_levels" translatable="false">CgkI-KrGnN0EEAIQEA</string>
+  <!--leaderboard Energy Saved-->
+  <string name="leaderboard_energy_saved" translatable="false">CgkI-KrGnN0EEAIQEQ</string>
+  <!--leaderboard Parts Saved-->
+  <string name="leaderboard_parts_saved" translatable="false">CgkI-KrGnN0EEAIQEg</string>
+</resources>

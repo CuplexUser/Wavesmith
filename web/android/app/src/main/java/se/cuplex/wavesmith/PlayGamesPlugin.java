@@ -8,6 +8,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.gms.games.LeaderboardsClient;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.android.gms.games.SnapshotsClient;
@@ -16,11 +17,13 @@ import com.google.android.gms.games.snapshot.SnapshotMetadataChange;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Play Games Services v2: automatic sign-in, achievements, and a cloud save holding the
- * progress JSON.
+ * Play Games Services v2: automatic sign-in, achievements, leaderboards, and a cloud save
+ * holding the progress JSON.
  *
- * Stays inert until a real Games project ID replaces the placeholder in
- * res/values/games.xml, so builds without Play Games set up still run.
+ * Stays inert until a real Games project ID is in app_id in res/values/game-ids.xml, so
+ * builds without Play Games set up still run. That file is the Play Console's "Get resources"
+ * export; achievements and leaderboards arrive by their name there (without the
+ * "achievement_" or "leaderboard_" prefix), and one missing from it is skipped.
  */
 @CapacitorPlugin(name = "PlayGames")
 public class PlayGamesPlugin extends Plugin {
@@ -29,7 +32,7 @@ public class PlayGamesPlugin extends Plugin {
 
     @Override
     public void load() {
-        String id = getContext().getString(R.string.game_services_project_id);
+        String id = getContext().getString(R.string.app_id);
         enabled = id != null && !id.isEmpty() && !id.startsWith("REPLACE");
         if (enabled) PlayGamesSdk.initialize(getContext());
     }
@@ -71,15 +74,29 @@ public class PlayGamesPlugin extends Plugin {
         });
     }
 
+    /**
+     * The Play ID for a name such as "first_ripple" from res/values/game-ids.xml
+     * ("achievement_first_ripple"), or null when the file doesn't have it.
+     */
+    private String playId(String prefix, String name) {
+        int res = getContext().getResources()
+            .getIdentifier(prefix + name, "string", getContext().getPackageName());
+        if (res == 0) return null;
+        String id = getContext().getString(res);
+        return id.isEmpty() ? null : id;
+    }
+
+    /** Unlocks the achievement for {@code name}; resolves without doing anything when it has no ID. */
     @PluginMethod
     public void unlock(PluginCall call) {
         if (!ready(call)) return;
-        String id = call.getString("id");
-        if (id == null) {
-            call.reject("id is required");
+        String name = call.getString("name");
+        if (name == null) {
+            call.reject("name is required");
             return;
         }
-        PlayGames.getAchievementsClient(getActivity()).unlock(id);
+        String id = playId("achievement_", name);
+        if (id != null) PlayGames.getAchievementsClient(getActivity()).unlock(id);
         call.resolve();
     }
 
@@ -93,6 +110,43 @@ public class PlayGamesPlugin extends Plugin {
 
     @ActivityCallback
     private void achievementsClosed(PluginCall call, ActivityResult result) {
+        call.resolve();
+    }
+
+    /** Submits {@code score} to the leaderboard for {@code name}. Play keeps each player's best. */
+    @PluginMethod
+    public void submitScore(PluginCall call) {
+        if (!ready(call)) return;
+        String name = call.getString("name");
+        // getInt, not getLong: Capacitor hands small JS numbers over as Integer.
+        Integer score = call.getInt("score");
+        if (name == null || score == null) {
+            call.reject("name and score are required");
+            return;
+        }
+        String id = playId("leaderboard_", name);
+        if (id != null) PlayGames.getLeaderboardsClient(getActivity()).submitScore(id, score);
+        call.resolve();
+    }
+
+    /** Shows the leaderboard for {@code name}, or the list of all leaderboards without one. */
+    @PluginMethod
+    public void showLeaderboard(PluginCall call) {
+        if (!ready(call)) return;
+        String name = call.getString("name");
+        String id = name != null ? playId("leaderboard_", name) : null;
+        if (name != null && id == null) {
+            call.reject("No leaderboard ID for " + name, "NOT_CONFIGURED");
+            return;
+        }
+        LeaderboardsClient leaderboards = PlayGames.getLeaderboardsClient(getActivity());
+        (id != null ? leaderboards.getLeaderboardIntent(id) : leaderboards.getAllLeaderboardsIntent())
+            .addOnSuccessListener(intent -> startActivityForResult(call, intent, "leaderboardClosed"))
+            .addOnFailureListener(e -> call.reject(e.getMessage()));
+    }
+
+    @ActivityCallback
+    private void leaderboardClosed(PluginCall call, ActivityResult result) {
         call.resolve();
     }
 

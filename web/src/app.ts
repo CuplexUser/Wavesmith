@@ -2,7 +2,7 @@
 
 import { AudioEngine } from './audio/engine';
 import type { Catalog } from './levels';
-import { earnedAchievements, type Games } from './platform/games';
+import { earnedAchievements, totalStars, type Games } from './platform/games';
 import { AmplitudeBuckets, type Haptics } from './platform/haptics';
 import type { Lifecycle } from './platform/native';
 import type { Store } from './platform/store';
@@ -110,10 +110,10 @@ export class App {
     }
   }
 
-  /** Records a result; on improvement, unlocks achievements and updates the cloud save. */
+  /** Records a result; on improvement, updates achievements, leaderboards, and the cloud save. */
   recordResult(levelId: string, stars: number): void {
     if (!this.progress.record(levelId, stars)) return;
-    void this.games.sync(earnedAchievements(this.catalog, (id) => this.progress.stars(id)));
+    void this.syncGames();
     window.clearTimeout(this.cloudTimer);
     this.cloudTimer = window.setTimeout(() => void this.games.save(JSON.stringify(this.progress.snapshot())), 2000);
   }
@@ -130,8 +130,14 @@ export class App {
           // Unreadable cloud save: keep the local one, which overwrites it on the next result.
         }
       }
-      await this.games.sync(earnedAchievements(this.catalog, (id) => this.progress.stars(id)));
+      await this.syncGames();
     }
+  }
+
+  /** Sends the current achievements and star total to Play Games. */
+  private syncGames(): Promise<void> {
+    const stars = (id: string) => this.progress.stars(id);
+    return this.games.sync(earnedAchievements(this.catalog, stars), totalStars(this.catalog, stars));
   }
 
   go(route: Route): void {

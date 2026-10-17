@@ -1,5 +1,5 @@
-// Play Games Services: achievements and a cloud save of the progress JSON. A no-op on the web
-// and in builds without a Games project ID (android/.../PlayGamesPlugin.java).
+// Play Games Services: achievements, leaderboards, and a cloud save of the progress JSON. A
+// no-op on the web and in builds without a Games project ID (android/.../PlayGamesPlugin.java).
 
 import { registerPlugin } from '@capacitor/core';
 import type { Catalog } from '../levels';
@@ -10,33 +10,40 @@ interface PlayGamesPlugin {
   isAvailable(): Promise<{ available: boolean }>;
   status(): Promise<{ signedIn: boolean }>;
   signIn(): Promise<{ signedIn: boolean }>;
-  unlock(o: { id: string }): Promise<void>;
+  unlock(o: { name: string }): Promise<void>;
   showAchievements(): Promise<void>;
+  submitScore(o: { name: string; score: number }): Promise<void>;
+  showLeaderboard(o: { name?: string }): Promise<void>;
   save(o: { data: string }): Promise<void>;
   load(): Promise<{ data: string }>;
 }
 
-/**
- * Achievement IDs from the Play Console (Play Games Services → Achievements), keyed by the
- * game's own names. Achievements without an ID are skipped. See docs/android.md for the list
- * to create.
- */
-export const ACHIEVEMENT_IDS: Record<string, string> = {
-  'first-solve': '',
-  'chapter-1': '',
-  'chapter-2': '',
-  'chapter-3': '',
-  'chapter-4': '',
-  'chapter-5': '',
-  'chapter-6': '',
-  'chapter-1-stars': '',
-  'chapter-2-stars': '',
-  'chapter-3-stars': '',
-  'chapter-4-stars': '',
-  'chapter-5-stars': '',
-  'chapter-6-stars': '',
-  'all-stars': '',
+// Play IDs live in android/app/src/main/res/values/game-ids.xml, the Play Console's "Get
+// resources" export. It names each entry after the title given in the console, so the names
+// below must match those titles (lowercase, spaces as "_"). See docs/android.md for the list.
+
+/** Play names of the achievements, keyed by the names earnedAchievements returns. */
+export const ACHIEVEMENTS: Record<string, string> = {
+  'first-solve': 'first_ripple',
+  'chapter-1': 'reflection',
+  'chapter-2': 'interference',
+  'chapter-3': 'resonance',
+  'chapter-4': 'refraction',
+  'chapter-5': 'light',
+  'chapter-6': 'doppler',
+  'chapter-1-stars': 'reflection_mastered',
+  'chapter-2-stars': 'interference_mastered',
+  'chapter-3-stars': 'resonance_mastered',
+  'chapter-4-stars': 'refraction_mastered',
+  'chapter-5-stars': 'light_mastered',
+  'chapter-6-stars': 'doppler_mastered',
+  'all-stars': 'wavesmith',
 };
+
+/** Play names of the leaderboards. */
+export const LEADERBOARDS = {
+  totalStars: 'total_stars',
+} as const;
 
 /** Achievements earned by a set of results (stars per level id). */
 export function earnedAchievements(catalog: Catalog, stars: (id: string) => number): string[] {
@@ -57,13 +64,24 @@ export function earnedAchievements(catalog: Catalog, stars: (id: string) => numb
   return out;
 }
 
+/** Stars earned across the whole catalog, the score on the total-stars leaderboard. */
+export function totalStars(catalog: Catalog, stars: (id: string) => number): number {
+  let total = 0;
+  for (const level of catalog.levels.values()) total += stars(level.id);
+  return total;
+}
+
 export interface Games {
   readonly available: boolean;
   signedIn(): Promise<boolean>;
   signIn(): Promise<boolean>;
-  /** Unlocks every earned achievement that has a Play ID (repeats are ignored by Play). */
-  sync(earned: string[]): Promise<void>;
+  /**
+   * Unlocks every earned achievement and submits the star total to its leaderboard (repeats
+   * and lower scores are ignored by Play).
+   */
+  sync(earned: string[], totalStars: number): Promise<void>;
   showAchievements(): Promise<void>;
+  showLeaderboards(): Promise<void>;
   save(json: string): Promise<void>;
   load(): Promise<string | null>;
 }
@@ -78,6 +96,7 @@ class NoGames implements Games {
   }
   async sync(): Promise<void> {}
   async showAchievements(): Promise<void> {}
+  async showLeaderboards(): Promise<void> {}
   async save(): Promise<void> {}
   async load(): Promise<string | null> {
     return null;
@@ -87,6 +106,7 @@ class NoGames implements Games {
 class PlayGames implements Games {
   readonly available = true;
   private unlocked = new Set<string>();
+  private submittedStars = 0;
   constructor(private plugin: PlayGamesPlugin) {}
 
   async signedIn(): Promise<boolean> {
@@ -105,21 +125,33 @@ class PlayGames implements Games {
     }
   }
 
-  async sync(earned: string[]): Promise<void> {
+  async sync(earned: string[], totalStars: number): Promise<void> {
     for (const key of earned) {
-      const id = ACHIEVEMENT_IDS[key];
-      if (!id || this.unlocked.has(id)) continue;
+      const name = ACHIEVEMENTS[key];
+      if (!name || this.unlocked.has(name)) continue;
       try {
-        await this.plugin.unlock({ id });
-        this.unlocked.add(id);
+        await this.plugin.unlock({ name });
+        this.unlocked.add(name);
       } catch {
         // Not signed in or offline: retried on the next sync.
+      }
+    }
+    if (totalStars > this.submittedStars) {
+      try {
+        await this.plugin.submitScore({ name: LEADERBOARDS.totalStars, score: totalStars });
+        this.submittedStars = totalStars;
+      } catch {
+        // Retried on the next sync.
       }
     }
   }
 
   async showAchievements(): Promise<void> {
     await this.plugin.showAchievements().catch(() => {});
+  }
+
+  async showLeaderboards(): Promise<void> {
+    await this.plugin.showLeaderboard({}).catch(() => {});
   }
 
   async save(json: string): Promise<void> {

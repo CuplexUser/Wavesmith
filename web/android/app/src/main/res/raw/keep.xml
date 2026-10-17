@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keeps the Play Games IDs in values/game-ids.xml through resource shrinking: PlayGamesPlugin
+     looks them up by name, so nothing refers to them through R. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/achievement_*,@string/leaderboard_*" />
