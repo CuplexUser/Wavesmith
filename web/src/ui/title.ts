@@ -41,6 +41,18 @@ export function titleScreen(app: App): Screen {
       soundBtn.innerHTML = app.toggleMute() ? ICONS.muted : ICONS.sound;
     },
   });
+  // Play Games achievements and leaderboards, in the app with Play Games set up.
+  const gamesNote = h('p', { class: 'title-progress', role: 'status' });
+  const playGamesBtn = (view: 'achievements' | 'leaderboards', label: string, icon: string) =>
+    h('button', {
+      class: 'icon-btn',
+      'aria-label': label,
+      html: icon,
+      onclick: async () => {
+        gamesNote.textContent = '';
+        if (!(await app.showPlayGames(view))) gamesNote.textContent = 'Couldn’t sign in to Play Games';
+      },
+    });
   const root = h(
     'div',
     { class: 'screen title' },
@@ -61,9 +73,12 @@ export function titleScreen(app: App): Screen {
         { class: 'title-actions' },
         h('button', { class: 'btn primary', onclick: () => app.go({ screen: 'select' }) }, total > 0 ? 'Continue' : 'Play'),
         soundBtn,
+        app.games.available ? playGamesBtn('achievements', 'Achievements', ICONS.trophy) : null,
+        app.games.available ? playGamesBtn('leaderboards', 'Leaderboards', ICONS.leaderboard) : null,
         h('button', { class: 'icon-btn', 'aria-label': 'Settings', html: ICONS.gear, onclick: () => openSettings(app) }),
       ),
       total > 0 ? h('p', { class: 'title-progress' }, `${total} / ${max} stars`) : null,
+      gamesNote,
       h('button', { class: 'link-btn title-editor', onclick: () => app.go({ screen: 'editor' }) }, 'Level editor'),
     ),
   );

@@ -19,6 +19,13 @@ const PENTATONIC = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
 
 const midiToHz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
+/**
+ * Android (the app's WebView and mobile Chrome) renders audio with the device's smallest buffer
+ * by default, which underruns and crackles while the solver keeps the CPU busy. A larger buffer
+ * and a shorter reverb tail keep it steady; the extra latency doesn't matter for this game.
+ */
+const ANDROID = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+
 /** A short exponentially decaying impulse response, generated once, for the reverb. */
 function makeImpulse(ctx: AudioContext, seconds: number, decay: number): AudioBuffer {
   const rate = ctx.sampleRate;
@@ -50,6 +57,7 @@ export class AudioEngine {
   private voiceOscs: OscillatorNode[] = [];
   private voiceTypes: OscillatorType[] = [];
   private shimmer: GainNode | null = null;
+  private shimmerDepth: GainNode | null = null;
   private noiseGain: GainNode | null = null;
   private noiseFilter: BiquadFilterNode | null = null;
 
@@ -57,7 +65,6 @@ export class AudioEngine {
   private padGain: GainNode | null = null;
   private padOscs: OscillatorNode[] = [];
 
-  private kind: VoiceKind = 'sound';
   private root = 57; // A3
   private lastStep = -1;
   private lastMilestone = 0;
@@ -78,7 +85,7 @@ export class AudioEngine {
     const Ctor =
       window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;
-    const ctx = new Ctor();
+    const ctx = new Ctor({ latencyHint: ANDROID ? 'playback' : 'interactive' });
     this.ctx = ctx;
 
     const comp = ctx.createDynamicsCompressor();
@@ -91,7 +98,7 @@ export class AudioEngine {
     this.dry = ctx.createGain();
     this.dry.connect(comp);
     const reverb = ctx.createConvolver();
-    reverb.buffer = makeImpulse(ctx, 2.4, 2.8);
+    reverb.buffer = makeImpulse(ctx, ANDROID ? 1.6 : 2.4, 2.8);
     this.wet = ctx.createGain();
     this.wet.gain.value = 0.32;
     this.wet.connect(reverb).connect(comp);
@@ -131,6 +138,14 @@ export class AudioEngine {
     this.shimmer = ctx.createGain();
     this.shimmer.gain.value = 1;
     this.voiceFilter.connect(this.shimmer).connect(this.voiceGain);
+    // Light's tremolo runs at audio rate: stepping the gain once per frame clicks, worst on
+    // phones where frames come unevenly. enterLevel sets its depth.
+    const tremolo = ctx.createOscillator();
+    tremolo.frequency.value = 7;
+    this.shimmerDepth = ctx.createGain();
+    this.shimmerDepth.gain.value = 0;
+    tremolo.connect(this.shimmerDepth).connect(this.shimmer.gain);
+    tremolo.start();
     this.send(this.voiceGain, 0.8);
     // Two slightly detuned saws and a sine an octave down.
     const specs: [OscillatorType, number, number][] = [
@@ -213,7 +228,6 @@ export class AudioEngine {
 
   /** Sets the key and voice for a level and fades the pad in. `seed` varies the key per level. */
   enterLevel(kind: VoiceKind, seed: number): void {
-    this.kind = kind;
     // Walk the circle of fifths so neighboring levels sound related but not identical.
     this.root = 50 + ((seed * 7) % 12);
     this.lastStep = -1;
@@ -229,6 +243,9 @@ export class AudioEngine {
       const type = this.voiceTypes[i]!;
       o.type = kind === 'light' && type === 'sawtooth' ? 'sine' : type;
     });
+    // Light shimmers: the gain swings between 0.5 and 1.
+    this.shimmer?.gain.setTargetAtTime(kind === 'light' ? 0.75 : 1, t, 0.05);
+    this.shimmerDepth?.gain.setTargetAtTime(kind === 'light' ? 0.25 : 0, t, 0.05);
   }
 
   leaveLevel(): void {
@@ -267,14 +284,11 @@ export class AudioEngine {
     }
     this.voiceFilter.frequency.setTargetAtTime(350 + 2600 * Math.min(1, x), t, 0.08);
     // Loudness follows the reading; the live wave adds a pulse at the wave's own frequency.
+    // The wave is sampled once per frame, so the gain glides rather than jumps between frames,
+    // which would crackle when frames arrive unevenly.
     const pulse = 0.55 + 0.45 * Math.min(1, Math.abs(wave));
     const base = 0.11 * x * x;
-    this.voiceGain.gain.setTargetAtTime(base * pulse, t, 0.03);
-    if (this.shimmer) {
-      // Light shimmers with a fast tremolo.
-      const s = this.kind === 'light' ? 0.75 + 0.25 * Math.sin(t * 2 * Math.PI * 7) : 1;
-      this.shimmer.gain.setTargetAtTime(s, t, 0.01);
-    }
+    this.voiceGain.gain.setTargetAtTime(base * pulse, t, 0.05);
     // Milestone notes at 50%, 80%, and 100%.
     const milestone = x >= 1 ? 3 : x >= 0.8 ? 2 : x >= 0.5 ? 1 : 0;
     if (milestone > this.lastMilestone) this.pluck(this.root + 24 + PENTATONIC[milestone + 1]!, 0.09, 0.9);

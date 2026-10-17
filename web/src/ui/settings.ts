@@ -10,30 +10,39 @@ import { ICONS } from './icons';
 
 type Choice<T> = { value: T; label: string };
 
-/** Play Games sign-in, achievements, and leaderboards. */
+/**
+ * Play Games achievements and leaderboards, always shown (they sign in when tapped), and a
+ * sign-in button while the player is signed out.
+ */
 function playGamesRow(app: App): HTMLElement {
   const row = h('div', { class: 'setting-actions' });
+  const note = h('small', { class: 'setting-note', role: 'status' });
+  const failed = () => (note.textContent = 'Couldn’t sign in to Play Games');
+  const open = async (view: 'achievements' | 'leaderboards') => {
+    note.textContent = '';
+    if (!(await app.showPlayGames(view))) failed();
+    void render();
+  };
   const render = async () => {
-    if (await app.games.signedIn()) {
-      row.replaceChildren(
-        h('button', { class: 'btn small', type: 'button', onclick: () => void app.games.showAchievements() }, 'Achievements'),
-        h('button', { class: 'btn small', type: 'button', onclick: () => void app.games.showLeaderboards() }, 'Leaderboards'),
-      );
-      return;
-    }
-    row.replaceChildren(
-      h(
-        'button',
-        {
-          class: 'btn small',
-          type: 'button',
-          onclick: async () => {
-            if (await app.games.signIn()) await app.syncAccounts();
-            void render();
-          },
+    const signIn = h(
+      'button',
+      {
+        class: 'btn small',
+        type: 'button',
+        onclick: async () => {
+          note.textContent = '';
+          if (await app.games.signIn()) await app.syncAccounts();
+          else failed();
+          void render();
         },
-        'Sign in to Play Games',
-      ),
+      },
+      'Sign in',
+    );
+    row.replaceChildren(
+      h('button', { class: 'btn small', type: 'button', onclick: () => void open('achievements') }, 'Achievements'),
+      h('button', { class: 'btn small', type: 'button', onclick: () => void open('leaderboards') }, 'Leaderboards'),
+      ...((await app.games.signedIn()) ? [] : [signIn]),
+      note,
     );
   };
   void render();

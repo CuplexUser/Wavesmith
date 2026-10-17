@@ -134,6 +134,19 @@ export class App {
     }
   }
 
+  /**
+   * Opens Play Games' achievements or leaderboards, signing in first when automatic sign-in
+   * didn't happen. False when the player couldn't be signed in.
+   */
+  async showPlayGames(view: 'achievements' | 'leaderboards'): Promise<boolean> {
+    if (!(await this.games.signedIn())) {
+      if (!(await this.games.signIn())) return false;
+      await this.syncAccounts();
+    }
+    await (view === 'achievements' ? this.games.showAchievements() : this.games.showLeaderboards());
+    return true;
+  }
+
   /** Sends the current achievements and star total to Play Games. */
   private syncGames(): Promise<void> {
     const stars = (id: string) => this.progress.stars(id);
